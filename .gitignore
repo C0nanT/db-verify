@@ -1,0 +1,28 @@
+# Binaries
+db-verify
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Backup/dump data (may be large and/or contain sensitive data)
+data/
+
+# Environment files
+.env
+.env.*
+
+# OS/editor files
+.DS_Store
+*.swp
