@@ -265,7 +265,7 @@ func (c *pgContainer) Restore(ctx context.Context, b *Backup, jobs int) (*Restor
 	}
 	if len(res.Errors) > 0 {
 		if f, e := os.CreateTemp("", "db-verify-*.log"); e == nil {
-			f.Write(out)
+			_, _ = f.Write(out)
 			f.Close()
 			res.LogPath = f.Name()
 		}
@@ -274,7 +274,7 @@ func (c *pgContainer) Restore(ctx context.Context, b *Backup, jobs int) (*Restor
 }
 
 func (c *pgContainer) Remove() {
-	exec.Command("docker", "rm", "-f", c.Name).Run()
+	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
 }
 
 // ------------------------------------------------------------- session ---

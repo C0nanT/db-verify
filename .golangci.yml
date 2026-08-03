@@ -1,0 +1,24 @@
+# Configuração do golangci-lint para o gate rápido (scripts/check fast).
+# Ver .scratch/quality-gates/tickets/02-ferramentas-pinadas-e-lint.md.
+#
+# Só estática: staticcheck, errcheck, ineffassign, unused, govet. Nada de linter de
+# estilo opinativo (nomes, doc-comments) — os comentários deste repo são em pt-BR.
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+issues:
+  exclude-rules:
+    # Erros de retorno ignorados em teste (ex.: defer rows.Close()) não bloqueiam o gate.
+    - path: _test\.go
+      linters:
+        - errcheck
+
+run:
+  timeout: 3m

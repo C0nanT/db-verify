@@ -17,15 +17,15 @@ ou anotar uma exclusão justificada). Refatorar engine não faz parte deste tick
 
 **Blocked by:** 01 — Ponto de entrada `scripts/check` com o gate rápido base
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Um comando único instala/prepara todas as ferramentas do gate
-- [ ] Versões pinadas e versionadas no repo; nenhuma resolução `@latest` em nenhum lugar
-- [ ] `.golangci.yml` versionado habilitando ao menos staticcheck, errcheck, ineffassign, unused e govet
-- [ ] Sem linters de estilo opinativo sobre nomes ou doc-comments (comentários do repo são pt-BR)
-- [ ] `errcheck` relaxado em arquivos `_test.go`
-- [ ] `scripts/check fast` roda o linter depois de `go vet` e antes dos testes
-- [ ] Achado de linter → exit ≠ 0, mensagem final identifica a etapa como lint
-- [ ] Ferramenta ausente → mensagem em pt-BR dizendo qual é e como instalar
-- [ ] `scripts/check fast` verde na árvore atual do repo
-- [ ] Nenhum arquivo de engine reestruturado além do mínimo para o linter passar
+- [x] Um comando único instala/prepara todas as ferramentas do gate
+- [x] Versões pinadas e versionadas no repo; nenhuma resolução `@latest` em nenhum lugar
+- [x] `.golangci.yml` versionado habilitando ao menos staticcheck, errcheck, ineffassign, unused e govet
+- [x] Sem linters de estilo opinativo sobre nomes ou doc-comments (comentários do repo são pt-BR)
+- [x] `errcheck` relaxado em arquivos `_test.go`
+- [x] `scripts/check fast` roda o linter depois de `go vet` e antes dos testes
+- [x] Achado de linter → exit ≠ 0, mensagem final identifica a etapa como lint
+- [x] Ferramenta ausente → mensagem em pt-BR dizendo qual é e como instalar
+- [x] `scripts/check fast` verde na árvore atual do repo
+- [x] Nenhum arquivo de engine reestruturado além do mínimo para o linter passar

@@ -1,0 +1,33 @@
+# Configuração do secrets scan do gate rápido (scripts/check fast).
+# Estende as regras padrão do gitleaks; a allowlist é parte do contrato:
+# engine nova que hardcodar credencial de container efêmero precisa de
+# uma entrada consciente aqui (com comentário).
+
+title = "db-verify"
+
+[extend]
+useDefault = true
+
+# Dumps reais e fixtures de detecção ficam fora do escopo do scan.
+[[allowlists]]
+description = "data/ — dumps reais (gitignored); nunca devem ser commitados nem escaneados"
+paths = ['''(?:^|/)data/''']
+
+[[allowlists]]
+description = "testdata/ — fixtures de headers/formatos de backup, sem credenciais reais"
+paths = ['''(?:^|/)testdata/''']
+
+# Credenciais efêmeras de container: senhas fixas só para o Docker de verificação.
+# Cada entrada documenta onde a senha vive; não ampliar sem necessidade.
+
+[[allowlists]]
+description = "Postgres — Pass/POSTGRES_PASSWORD=postgres em postgres.go, docker_test.go, postgres_conformance_test.go"
+regexes = [
+  '''(?i)^postgres$''',
+]
+
+[[allowlists]]
+description = "MySQL/MariaDB — Pass/MYSQL_ROOT_PASSWORD/MARIADB_ROOT_PASSWORD=root em mysql.go, mariadb.go e testes"
+regexes = [
+  '''(?i)^root$''',
+]

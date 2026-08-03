@@ -178,7 +178,7 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 
 	dbNames, err := mongoRestoredDBs(ctx, client)
 	if err != nil {
-		client.Disconnect(ctx)
+		_ = client.Disconnect(ctx)
 		cont.Remove()
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (c *mongoContainer) WaitReady(ctx context.Context, timeout time.Duration) e
 		client, err := mongo.Connect(options.Client().ApplyURI(c.URI()).SetServerSelectionTimeout(2 * time.Second))
 		if err == nil {
 			pingErr := client.Ping(ctx, readpref.Primary())
-			client.Disconnect(ctx)
+			_ = client.Disconnect(ctx)
 			if pingErr == nil {
 				return nil
 			}
@@ -325,7 +325,7 @@ func (c *mongoContainer) Restore(ctx context.Context, b *Backup, jobs int) (*Res
 	}
 	if len(res.Errors) > 0 {
 		if f, e := os.CreateTemp("", "db-verify-*.log"); e == nil {
-			f.WriteString(output)
+			_, _ = f.WriteString(output)
 			f.Close()
 			res.LogPath = f.Name()
 		}
@@ -334,7 +334,7 @@ func (c *mongoContainer) Restore(ctx context.Context, b *Backup, jobs int) (*Res
 }
 
 func (c *mongoContainer) Remove() {
-	exec.Command("docker", "rm", "-f", c.Name).Run()
+	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
 }
 
 // ------------------------------------------------------------- sessão ---
@@ -345,7 +345,7 @@ func mongoConnect(ctx context.Context, uri string) (*mongo.Client, error) {
 		return nil, err
 	}
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		client.Disconnect(ctx)
+		_ = client.Disconnect(ctx)
 		return nil, err
 	}
 	return client, nil
@@ -706,9 +706,10 @@ func (s *mongoSession) ConnectHint() ConnectHint {
 func (s *mongoSession) Restore() *RestoreResult { return s.restore }
 
 func (s *mongoSession) Close() error {
+	var err error
 	if s.client != nil {
-		s.client.Disconnect(context.Background())
+		err = s.client.Disconnect(context.Background())
 	}
 	s.cont.Remove()
-	return nil
+	return err
 }

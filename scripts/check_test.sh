@@ -6,7 +6,9 @@
 
 set -uo pipefail
 
-CHECK_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHECK_SCRIPT="$SCRIPTS_DIR/check"
+REPO_ROOT="$(cd "$SCRIPTS_DIR/.." && pwd)"
 failures=0
 
 assert_eq() {
@@ -41,6 +43,9 @@ assert_last_line() {
   fi
 }
 
+# Reaproveita go.mod/go.sum do repo real (mesma ferramenta pinada via tool dependency,
+# já presente no cache de módulos) em vez de recalcular versão/dependências do zero —
+# garante que o fixture roda o gate de lint com a mesma versão do golangci-lint.
 new_fixture_repo() {
   local dir
   dir="$(mktemp -d)"
@@ -49,13 +54,10 @@ new_fixture_repo() {
     git init -q
     git config user.email test@example.com
     git config user.name test
-    local go_version
-    go_version="$(go env GOVERSION | sed 's/^go//')"
-    cat > go.mod <<EOF
-module fixture
-
-go ${go_version}
-EOF
+    sed '1s#^module .*#module fixture#' "$REPO_ROOT/go.mod" > go.mod
+    cp "$REPO_ROOT/go.sum" go.sum
+    cp "$REPO_ROOT/.golangci.yml" .golangci.yml
+    cp "$REPO_ROOT/.gitleaks.toml" .gitleaks.toml
     cat > main.go <<'EOF'
 package main
 
@@ -115,6 +117,49 @@ if [[ "$out" == *"testes unitários"* ]]; then
   failures=$((failures + 1))
 else
   echo "ok: falha em vet não chega à etapa de testes unitários"
+fi
+rm -rf "$repo"
+
+# Cenário 2c: achado de lint (erro de retorno ignorado) -> exit != 0, etapa lint, para antes do unit
+repo="$(new_fixture_repo)"
+cat > "$repo/main.go" <<'EOF'
+package main
+
+import "os"
+
+func main() {
+	os.Open("main.go")
+}
+EOF
+out="$(cd "$repo" && "$CHECK_SCRIPT" fast 2>&1)"
+code=$?
+assert_eq "achado de lint -> exit != 0" "1" "$([[ $code -ne 0 ]] && echo 1 || echo 0)"
+assert_last_line "última linha identifica etapa lint" "$out" "lint"
+if [[ "$out" == *"testes unitários"* ]]; then
+  echo "FALHOU: falha em lint não deveria chegar à etapa de testes unitários"
+  failures=$((failures + 1))
+else
+  echo "ok: falha em lint não chega à etapa de testes unitários"
+fi
+rm -rf "$repo"
+
+# Cenário 2d: segredo plantado e staged -> exit != 0, etapa secrets, para antes do unit
+repo="$(new_fixture_repo)"
+# AKIA… com entropia suficiente; o exemplo oficial da AWS é allowlistado pelo gitleaks.
+printf '%s\n' 'aws_access_key_id = AKIAJG74V2RRT4XVRMSA' > "$repo/planted-secret.env"
+(
+  cd "$repo"
+  git add planted-secret.env
+)
+out="$(cd "$repo" && "$CHECK_SCRIPT" fast 2>&1)"
+code=$?
+assert_eq "segredo staged -> exit != 0" "1" "$([[ $code -ne 0 ]] && echo 1 || echo 0)"
+assert_last_line "última linha identifica etapa secrets" "$out" "secrets"
+if [[ "$out" == *"testes unitários"* ]]; then
+  echo "FALHOU: falha em secrets não deveria chegar à etapa de testes unitários"
+  failures=$((failures + 1))
+else
+  echo "ok: falha em secrets não chega à etapa de testes unitários"
 fi
 rm -rf "$repo"
 

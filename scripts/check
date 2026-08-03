@@ -2,7 +2,11 @@
 # Ponto de entrada único dos gates de qualidade. Ver .scratch/quality-gates/SPEC.md.
 #
 # Uso: scripts/check <nível>
-#   fast — formatação, go vet e testes unitários (sem Docker)
+#   fast — formatação, go vet, lint, secrets scan (gitleaks) e testes unitários (sem Docker)
+#
+# Ferramentas do gate são tool dependencies do go.mod (diretiva `tool`, invocadas via
+# `go tool <nome>`), pinadas junto com as demais dependências. Comando único que
+# instala/prepara todas: `go mod download`.
 #
 # Funciona a partir de qualquer subdiretório do repo.
 
@@ -55,6 +59,44 @@ check_vet() {
   go vet ./...
 }
 
+GOLANGCI_LINT_PKG="github.com/golangci/golangci-lint/cmd/golangci-lint"
+GOLANGCI_LINT_MOD="github.com/golangci/golangci-lint"
+
+check_lint() {
+  if ! go tool golangci-lint version >/dev/null 2>&1; then
+    local version
+    version="$(go list -m -f '{{.Version}}' "$GOLANGCI_LINT_MOD" 2>/dev/null)"
+    echo "Ferramenta ausente: golangci-lint." >&2
+    echo "Instale/prepare as ferramentas do gate com: go mod download" >&2
+    if [[ -n "$version" ]]; then
+      echo "Se o problema persistir: go get -tool ${GOLANGCI_LINT_PKG}@${version}" >&2
+    fi
+    return 1
+  fi
+  go tool golangci-lint run ./...
+}
+
+GITLEAKS_MOD="github.com/zricethezav/gitleaks/v8"
+
+# Escaneia o conteúdo staged (o que vai para o commit). Allowlist em .gitleaks.toml.
+check_secrets() {
+  if [[ ! -f .gitleaks.toml ]]; then
+    echo "Configuração ausente: .gitleaks.toml (allowlist versionada do secrets scan)." >&2
+    return 1
+  fi
+  if ! go tool gitleaks version >/dev/null 2>&1; then
+    local version
+    version="$(go list -m -f '{{.Version}}' "$GITLEAKS_MOD" 2>/dev/null)"
+    echo "Ferramenta ausente: gitleaks." >&2
+    echo "Instale/prepare as ferramentas do gate com: go mod download" >&2
+    if [[ -n "$version" ]]; then
+      echo "Se o problema persistir: go get -tool ${GITLEAKS_MOD}@${version}" >&2
+    fi
+    return 1
+  fi
+  go tool gitleaks git --staged --no-banner -c .gitleaks.toml
+}
+
 check_unit() {
   go test ./...
 }
@@ -71,6 +113,18 @@ run_fast() {
   echo "==> [fast] análise estática (go vet)"
   if ! check_vet; then
     failed_stage="vet"
+    return 1
+  fi
+
+  echo "==> [fast] lint estático (golangci-lint)"
+  if ! check_lint; then
+    failed_stage="lint"
+    return 1
+  fi
+
+  echo "==> [fast] secrets scan (gitleaks)"
+  if ! check_secrets; then
+    failed_stage="secrets"
     return 1
   fi
 

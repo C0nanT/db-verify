@@ -334,7 +334,7 @@ func (c *redisContainer) failureResult(start time.Time, summary string) *Restore
 		}
 	}
 	if f, err := os.CreateTemp("", "db-verify-*.log"); err == nil {
-		f.Write(logs)
+		_, _ = f.Write(logs)
 		f.Close()
 		res.LogPath = f.Name()
 	}
@@ -342,7 +342,7 @@ func (c *redisContainer) failureResult(start time.Time, summary string) *Restore
 }
 
 func (c *redisContainer) Remove() {
-	exec.Command("docker", "rm", "-f", c.Name).Run()
+	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
 }
 
 // ------------------------------------------------------------- sessão ---

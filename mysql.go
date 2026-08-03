@@ -317,7 +317,7 @@ func (c *mysqlContainer) Restore(ctx context.Context) (*RestoreResult, error) {
 	}
 	if len(res.Errors) > 0 {
 		if f, e := os.CreateTemp("", "db-verify-*.log"); e == nil {
-			f.Write(out)
+			_, _ = f.Write(out)
 			f.Close()
 			res.LogPath = f.Name()
 		}
@@ -326,7 +326,7 @@ func (c *mysqlContainer) Restore(ctx context.Context) (*RestoreResult, error) {
 }
 
 func (c *mysqlContainer) Remove() {
-	exec.Command("docker", "rm", "-f", c.Name).Run()
+	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
 }
 
 // ------------------------------------------------------------- session ---

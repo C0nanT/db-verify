@@ -10,12 +10,12 @@ do escopo do scan.
 
 **Blocked by:** 02 — Ferramentas pinadas e `golangci-lint` no gate rápido
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Ferramenta de scan pinada no mesmo mecanismo do ticket 02
-- [ ] `scripts/check fast` roda o scan depois do linter e antes dos testes
-- [ ] Segredo plantado num arquivo a ser commitado → exit ≠ 0, etapa identificada como secrets
-- [ ] Configuração de allowlist versionada, com comentário explicando cada entrada
-- [ ] Credenciais efêmeras de container nas engines e testes não disparam achado
-- [ ] `data/` e `testdata/` excluídos do scan
-- [ ] `scripts/check fast` verde na árvore atual do repo
+- [x] Ferramenta de scan pinada no mesmo mecanismo do ticket 02
+- [x] `scripts/check fast` roda o scan depois do linter e antes dos testes
+- [x] Segredo plantado num arquivo a ser commitado → exit ≠ 0, etapa identificada como secrets
+- [x] Configuração de allowlist versionada, com comentário explicando cada entrada
+- [x] Credenciais efêmeras de container nas engines e testes não disparam achado
+- [x] `data/` e `testdata/` excluídos do scan
+- [x] `scripts/check fast` verde na árvore atual do repo

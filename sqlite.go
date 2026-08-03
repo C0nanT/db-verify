@@ -167,7 +167,7 @@ func sqliteIntegrityCheck(ctx context.Context, db *sql.DB) (*RestoreResult, erro
 	res.Duration = time.Since(start)
 	if len(res.Errors) > 0 {
 		if f, e := os.CreateTemp("", "db-verify-*.log"); e == nil {
-			f.WriteString(strings.Join(res.Errors, "\n"))
+			_, _ = f.WriteString(strings.Join(res.Errors, "\n"))
 			f.Close()
 			res.LogPath = f.Name()
 		}

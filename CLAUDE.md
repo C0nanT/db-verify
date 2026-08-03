@@ -40,7 +40,10 @@ go test -run TestFuncName ./...
 go test -tags docker ./...
 ```
 
-There is no separate lint config in this repo; rely on `go vet`/`gofmt` conventions.
+Static lint is `golangci-lint` (staticcheck, errcheck, ineffassign, unused, govet),
+configured in `.golangci.yml` and pinned as a Go tool dependency in `go.mod` — run it via
+`go tool golangci-lint run ./...` or `scripts/check fast`, which runs it after `go vet` and
+before the unit tests.
 
 ## Architecture
 
