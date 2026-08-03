@@ -10,40 +10,50 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// dumpEntry é um arquivo .dump encontrado na pasta data/.
-type dumpEntry struct {
+// backupEntry é um arquivo encontrado na pasta data/, já com a engine
+// detectada (ou marcado como desconhecido, quando nenhuma engine reconhece
+// o conteúdo).
+type backupEntry struct {
 	Path    string
 	Name    string
 	Size    int64
 	ModTime string
+	Engine  string // nome da engine detectada; "" quando desconhecido
+	Unknown bool
 }
 
-// findDumps procura arquivos .dump (e .dump.gz) dentro de dir, sem recursão.
-func findDumps(dir string) ([]dumpEntry, error) {
+// findBackups lista, sem recursão, todo arquivo regular de dir e roda a
+// detecção de formato (só o cabeçalho, barato) em cada um. Arquivos que
+// nenhuma engine reconhece entram mesmo assim, marcados como Unknown — o
+// operador precisa ver que existe algo ali que a ferramenta não entende, em
+// vez de o arquivo simplesmente sumir da lista.
+func findBackups(dir string) ([]backupEntry, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	var out []dumpEntry
+	var out []backupEntry
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		low := strings.ToLower(name)
-		if !strings.HasSuffix(low, ".dump") && !strings.HasSuffix(low, ".dump.gz") {
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
-		out = append(out, dumpEntry{
-			Path:    filepath.Join(dir, name),
-			Name:    name,
+		path := filepath.Join(dir, e.Name())
+		be := backupEntry{
+			Path:    path,
+			Name:    e.Name(),
 			Size:    info.Size(),
 			ModTime: info.ModTime().Format("2006-01-02 15:04"),
-		})
+		}
+		if backup, err := InspectDump(path); err == nil {
+			be.Engine = backup.Engine
+		} else {
+			be.Unknown = true
+		}
+		out = append(out, be)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
@@ -51,15 +61,15 @@ func findDumps(dir string) ([]dumpEntry, error) {
 
 // pickerModel é uma TUI simples de seleção de arquivo.
 type pickerModel struct {
-	dumps    []dumpEntry
+	backups  []backupEntry
 	cursor   int
 	selected string
 	quitting bool
 	width    int
 }
 
-func newPickerModel(dumps []dumpEntry) *pickerModel {
-	return &pickerModel{dumps: dumps, width: 80}
+func newPickerModel(backups []backupEntry) *pickerModel {
+	return &pickerModel{backups: backups, width: 80}
 }
 
 func (m *pickerModel) Init() tea.Cmd { return nil }
@@ -78,11 +88,16 @@ func (m *pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.dumps)-1 {
+			if m.cursor < len(m.backups)-1 {
 				m.cursor++
 			}
 		case "enter":
-			m.selected = m.dumps[m.cursor].Path
+			// arquivos não reconhecidos não são selecionáveis: nenhuma
+			// engine sabe provisioná-los.
+			if m.backups[m.cursor].Unknown {
+				return m, nil
+			}
+			m.selected = m.backups[m.cursor].Path
 			m.quitting = true
 			return m, tea.Quit
 		}
@@ -97,18 +112,29 @@ func (m *pickerModel) View() string {
 	var b strings.Builder
 	b.WriteString(stTitle.Render("Verify Backup"))
 	b.WriteString("\n")
-	b.WriteString(stDim.Render("selecione um dump em data/ · ↑/↓ navega · enter confirma · q sai"))
+	b.WriteString(stDim.Render("selecione um backup em data/ · ↑/↓ navega · enter confirma · q sai"))
 	b.WriteString("\n\n")
 
-	nameW := 0
-	for _, d := range m.dumps {
+	nameW, engineW := 0, len("engine")
+	for _, d := range m.backups {
 		if len(d.Name) > nameW {
 			nameW = len(d.Name)
 		}
+		if len(d.engineLabel()) > engineW {
+			engineW = len(d.engineLabel())
+		}
 	}
-	for i, d := range m.dumps {
-		row := fmt.Sprintf("%-*s  %8s  %s", nameW, d.Name, humanSize(d.Size), d.ModTime)
-		if i == m.cursor {
+	for i, d := range m.backups {
+		engine := d.engineLabel()
+		if d.Unknown {
+			engine = stDim.Render(fmt.Sprintf("%-*s", engineW, engine))
+		} else {
+			engine = stAccent.Render(fmt.Sprintf("%-*s", engineW, engine))
+		}
+		row := fmt.Sprintf("%-*s  %s  %8s  %s", nameW, d.Name, engine, humanSize(d.Size), d.ModTime)
+		if d.Unknown {
+			row = stDim.Render("  " + row)
+		} else if i == m.cursor {
 			row = stSel.Render("▸ " + row)
 		} else {
 			row = "  " + row
@@ -118,18 +144,28 @@ func (m *pickerModel) View() string {
 	return stBox.Width(m.width - 2).Render(strings.Trim(b.String(), "\n"))
 }
 
-// pickDump lista os .dump em dataDir e pede ao usuário para escolher um.
-// Se houver exatamente um arquivo, ainda assim exibe a seleção para confirmação.
+// engineLabel devolve o nome da engine detectada, ou um rótulo explícito de
+// "desconhecido" para arquivos que nenhuma engine reconheceu.
+func (d backupEntry) engineLabel() string {
+	if d.Unknown {
+		return "desconhecido"
+	}
+	return d.Engine
+}
+
+// pickDump lista os arquivos reconhecidos em dataDir e pede ao usuário para
+// escolher um. Se houver exatamente um arquivo, ainda assim exibe a seleção
+// para confirmação.
 func pickDump(dataDir string) (string, error) {
-	dumps, err := findDumps(dataDir)
+	backups, err := findBackups(dataDir)
 	if err != nil {
 		return "", fmt.Errorf("não foi possível ler %s: %w", dataDir, err)
 	}
-	if len(dumps) == 0 {
-		return "", fmt.Errorf("nenhum arquivo .dump encontrado em %s", dataDir)
+	if len(backups) == 0 {
+		return "", fmt.Errorf("nenhum arquivo de backup encontrado em %s", dataDir)
 	}
 
-	m := newPickerModel(dumps)
+	m := newPickerModel(backups)
 	p := tea.NewProgram(m)
 	res, err := p.Run()
 	if err != nil {
@@ -137,7 +173,7 @@ func pickDump(dataDir string) (string, error) {
 	}
 	final := res.(*pickerModel)
 	if final.selected == "" {
-		return "", fmt.Errorf("nenhum dump selecionado")
+		return "", fmt.Errorf("nenhum backup selecionado")
 	}
 	return final.selected, nil
 }

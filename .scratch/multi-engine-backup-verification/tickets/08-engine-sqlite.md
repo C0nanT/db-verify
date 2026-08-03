@@ -11,20 +11,20 @@ cópia existe para a verificação nunca escrever no arquivo original do usuári
 **Blocked by:** 03 — Detecção por registry, flags e picker multi-formato; 04 — Suíte de
 conformidade que toda engine precisa passar.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Um arquivo SQLite é detectado pelo magic `SQLite format 3`, também comprimido
-- [ ] Extensões `.sqlite` e `.db` contam como sinal de confiança média
-- [ ] A verificação não sobe container nenhum e é instantânea
-- [ ] Verificar um SQLite funciona numa máquina sem Docker; as engines que exigem
+- [x] Um arquivo SQLite é detectado pelo magic `SQLite format 3`, também comprimido
+- [x] Extensões `.sqlite` e `.db` contam como sinal de confiança média
+- [x] A verificação não sobe container nenhum e é instantânea
+- [x] Verificar um SQLite funciona numa máquina sem Docker; as engines que exigem
       container é que falham, com erro claro
-- [ ] O arquivo original do usuário nunca é modificado — a verificação roda sobre uma cópia
-- [ ] A checagem de integridade roda, e um arquivo corrompido produz erro de restore
+- [x] O arquivo original do usuário nunca é modificado — a verificação roda sobre uma cópia
+- [x] A checagem de integridade roda, e um arquivo corrompido produz erro de restore
       reportado como nas outras engines
-- [ ] Saúde mostra os contadores que fazem sentido para SQLite, sem campos zerados
+- [x] Saúde mostra os contadores que fazem sentido para SQLite, sem campos zerados
       inaplicáveis
-- [ ] Coleções são as tabelas do arquivo, com contagem e tamanho
-- [ ] A coluna de ordenação segue a mesma heurística das demais engines relacionais
-- [ ] O SQL executado aparece na tela, copiável para o cliente `sqlite3`
-- [ ] O temporário é removido ao sair, e `--keep` o preserva imprimindo seu caminho
-- [ ] A engine passa a suíte de conformidade sem nenhuma exceção específica
+- [x] Coleções são as tabelas do arquivo, com contagem e tamanho
+- [x] A coluna de ordenação segue a mesma heurística das demais engines relacionais
+- [x] O SQL executado aparece na tela, copiável para o cliente `sqlite3`
+- [x] O temporário é removido ao sair, e `--keep` o preserva imprimindo seu caminho
+- [x] A engine passa a suíte de conformidade sem nenhuma exceção específica

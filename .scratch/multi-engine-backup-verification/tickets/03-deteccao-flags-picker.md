@@ -17,24 +17,24 @@ existe algo ali que a ferramenta não entende.
 
 **Blocked by:** 02 — Extrair `Engine`/`Session` e reimplementar Postgres atrás da interface.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] A detecção descomprime o cabeçalho antes de identificar, cobrindo gzip, zstd e bzip2
-- [ ] Um backup Postgres gzipado, zstdado e bzipado é detectado corretamente pelos três
-- [ ] A detecção lê apenas o cabeçalho — apontar para um arquivo enorme não trava o programa
-- [ ] Magic bytes vencem extensão, e extensão vence palpite, quando há conflito
-- [ ] `--engine <nome>` força a engine e pula a detecção
-- [ ] `--engine` com nome inexistente falha com erro que lista as engines disponíveis
-- [ ] `--list-engines` enumera as engines suportadas e sai
-- [ ] Um arquivo que nenhuma engine reconhece falha com erro que nomeia as engines
+- [x] A detecção descomprime o cabeçalho antes de identificar, cobrindo gzip, zstd e bzip2
+- [x] Um backup Postgres gzipado, zstdado e bzipado é detectado corretamente pelos três
+- [x] A detecção lê apenas o cabeçalho — apontar para um arquivo enorme não trava o programa
+- [x] Magic bytes vencem extensão, e extensão vence palpite, quando há conflito
+- [x] `--engine <nome>` força a engine e pula a detecção
+- [x] `--engine` com nome inexistente falha com erro que lista as engines disponíveis
+- [x] `--list-engines` enumera as engines suportadas e sai
+- [x] Um arquivo que nenhuma engine reconhece falha com erro que nomeia as engines
       disponíveis e o que cada uma espera
-- [ ] Um `.sql` plain sem cabeçalho identificável cai em Postgres com aviso explícito e
+- [x] Um `.sql` plain sem cabeçalho identificável cai em Postgres com aviso explícito e
       sugestão de usar `--engine`
-- [ ] `--version-tag` define a versão da imagem para qualquer engine
-- [ ] `--pg` continua funcionando como alias de `--version-tag`, imprimindo aviso de
+- [x] `--version-tag` define a versão da imagem para qualquer engine
+- [x] `--pg` continua funcionando como alias de `--version-tag`, imprimindo aviso de
       depreciação, sem quebrar scripts existentes
-- [ ] O picker lista todo arquivo reconhecido em `data/`, não só `.dump`
-- [ ] O picker mostra a engine detectada de cada arquivo
-- [ ] Arquivos não reconhecidos aparecem no picker marcados como desconhecidos e não são
+- [x] O picker lista todo arquivo reconhecido em `data/`, não só `.dump`
+- [x] O picker mostra a engine detectada de cada arquivo
+- [x] Arquivos não reconhecidos aparecem no picker marcados como desconhecidos e não são
       selecionáveis para verificação
-- [ ] A suíte do ticket 01 continua verde
+- [x] A suíte do ticket 01 continua verde

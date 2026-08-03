@@ -15,27 +15,27 @@ o dump de teste gerado pelo próprio teste — os arquivos em `data/` não entra
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Detecção identifica formato, versão de origem e banco de origem para: custom
+- [x] Detecção identifica formato, versão de origem e banco de origem para: custom
       (`PGDMP`), plain SQL, e tar
-- [ ] Cada uma dessas fixtures também é detectada corretamente quando gzipada
-- [ ] Arquivo vazio e arquivo de texto aleatório produzem o comportamento atual,
+- [x] Cada uma dessas fixtures também é detectada corretamente quando gzipada
+- [x] Arquivo vazio e arquivo de texto aleatório produzem o comportamento atual,
       documentado pelo teste
-- [ ] Fluxo completo contra um dump Postgres pequeno gerado no teste: restore reporta
+- [x] Fluxo completo contra um dump Postgres pequeno gerado no teste: restore reporta
       zero erros
-- [ ] A listagem de tabelas devolve as tabelas esperadas com contagem exata correta
-- [ ] Uma tabela vazia aparece na listagem com contagem zero, não é omitida
-- [ ] A heurística de coluna de ordenação é assertada para cada família suportada hoje:
+- [x] A listagem de tabelas devolve as tabelas esperadas com contagem exata correta
+- [x] Uma tabela vazia aparece na listagem com contagem zero, não é omitida
+- [x] A heurística de coluna de ordenação é assertada para cada família suportada hoje:
       criação (`created_at`, `data_criacao`), publicação (`published_at`, `data`),
       atualização (`updated_at`), timestamp/date genérico, PK de coluna única, e o caso
       sem nenhuma opção
-- [ ] O SQL resultante de cada caso acima é assertado, incluindo o fallback
+- [x] O SQL resultante de cada caso acima é assertado, incluindo o fallback
       `SELECT * … LIMIT 20`
-- [ ] Consulta de recentes devolve no máximo 20 linhas, em ordem decrescente pela coluna
+- [x] Consulta de recentes devolve no máximo 20 linhas, em ordem decrescente pela coluna
       escolhida
-- [ ] Formatação de valores é assertada para: nulo, date, timestamp, binário, e string
+- [x] Formatação de valores é assertada para: nulo, date, timestamp, binário, e string
       com quebra de linha
-- [ ] O container é removido ao encerrar, e preservado quando `--keep` é usado —
+- [x] O container é removido ao encerrar, e preservado quando `--keep` é usado —
       verificado por inspeção do Docker
-- [ ] Toda a suíte passa contra o código atual, sem nenhuma alteração em código de produção
+- [x] Toda a suíte passa contra o código atual, sem nenhuma alteração em código de produção

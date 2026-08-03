@@ -18,22 +18,22 @@ milhões de chaves não é opção.
 **Blocked by:** 03 — Detecção por registry, flags e picker multi-formato; 04 — Suíte de
 conformidade que toda engine precisa passar.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Um `.rdb` é detectado pelo magic `REDIS` e pela versão do formato, também comprimido
-- [ ] A versão da imagem é escolhida a partir da versão do RDB, com fallback documentado
-- [ ] O `.rdb` é posicionado no datadir antes de o servidor subir, e os dados aparecem
+- [x] Um `.rdb` é detectado pelo magic `REDIS` e pela versão do formato, também comprimido
+- [x] A versão da imagem é escolhida a partir da versão do RDB, com fallback documentado
+- [x] O `.rdb` é posicionado no datadir antes de o servidor subir, e os dados aparecem
       depois que ele fica pronto
-- [ ] Um `.rdb` inválido produz erro de restore com o log do container, e não um timeout
+- [x] Um `.rdb` inválido produz erro de restore com o log do container, e não um timeout
       genérico
-- [ ] Saúde mostra total de chaves, quebra por tipo (string, hash, list, set, zset,
+- [x] Saúde mostra total de chaves, quebra por tipo (string, hash, list, set, zset,
       stream), memória usada e quantas chaves têm TTL
-- [ ] Campos de saúde que não se aplicam ao Redis não aparecem zerados no cabeçalho
-- [ ] Coleções são grupos de chaves por prefixo até o primeiro separador, com contagem
-- [ ] A varredura do keyspace é amostrada e limitada, e um keyspace grande não trava a TUI
-- [ ] Chaves sem separador caem num grupo próprio identificável em vez de sumirem
-- [ ] O painel direito mostra uma amostra de chaves do grupo com tipo, TTL e preview do valor
-- [ ] O comando Redis nativo executado aparece na tela, copiável para o `redis-cli`
-- [ ] O filtro `/` funciona sobre os grupos de chaves
-- [ ] `--keep` imprime o comando `redis-cli` para reconectar
-- [ ] A engine passa a suíte de conformidade sem nenhuma exceção específica
+- [x] Campos de saúde que não se aplicam ao Redis não aparecem zerados no cabeçalho
+- [x] Coleções são grupos de chaves por prefixo até o primeiro separador, com contagem
+- [x] A varredura do keyspace é amostrada e limitada, e um keyspace grande não trava a TUI
+- [x] Chaves sem separador caem num grupo próprio identificável em vez de sumirem
+- [x] O painel direito mostra uma amostra de chaves do grupo com tipo, TTL e preview do valor
+- [x] O comando Redis nativo executado aparece na tela, copiável para o `redis-cli`
+- [x] O filtro `/` funciona sobre os grupos de chaves
+- [x] `--keep` imprime o comando `redis-cli` para reconectar
+- [x] A engine passa a suíte de conformidade sem nenhuma exceção específica

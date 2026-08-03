@@ -1,5 +1,7 @@
-// db-verify sobe um Postgres em Docker, restaura um .dump e abre uma TUI
-// para inspecionar as tabelas e os 20 registros mais recentes de cada uma.
+// db-verify sobe o banco certo em Docker, restaura um backup e abre uma TUI
+// para inspecionar as coleções e os 20 registros mais recentes de cada uma.
+// A escolha de engine (Postgres, e no futuro outras) fica inteiramente
+// atrás da interface Engine/Session — este arquivo só conhece o registro.
 package main
 
 import (
@@ -17,18 +19,42 @@ import (
 
 func main() {
 	var (
-		pgVersion = flag.String("pg", "", "versão do Postgres (padrão: a mesma do dump)")
-		port      = flag.Int("port", 0, "porta no host (padrão: primeira livre a partir de 55432)")
-		jobs      = flag.Int("jobs", 4, "paralelismo do pg_restore")
-		dbName    = flag.String("db", "verify", "nome do banco de destino")
-		keep      = flag.Bool("keep", false, "não remover o container ao sair")
-		noCounts  = flag.Bool("no-counts", false, "usar contagem estimada em vez de count(*)")
+		versionTag  = flag.String("version-tag", "", "versão da imagem da engine (padrão: a mesma do backup)")
+		pgVersion   = flag.String("pg", "", "alias depreciado de --version-tag")
+		port        = flag.Int("port", 0, "porta no host (padrão: primeira livre a partir de 55432)")
+		jobs        = flag.Int("jobs", 4, "paralelismo do restore, quando a engine suportar")
+		dbName      = flag.String("db", "verify", "nome do banco de destino")
+		keep        = flag.Bool("keep", false, "não remover o container ao sair")
+		noCounts    = flag.Bool("no-counts", false, "usar contagem estimada em vez de count(*)")
+		engineName  = flag.String("engine", "", "força a engine (pula a detecção); veja --list-engines")
+		listEngines = flag.Bool("list-engines", false, "lista as engines suportadas e sai")
 	)
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "uso: db-verify [flags] [arquivo.dump]\n\nsem argumento, lista os .dump encontrados em ./data\n\nflags:\n")
+		fmt.Fprintf(os.Stderr, "uso: db-verify [flags] [arquivo]\n\nsem argumento, lista os backups encontrados em ./data\n\nflags:\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *listEngines {
+		for _, e := range Engines() {
+			fmt.Printf("%s\n    %s\n", e.Name(), e.Expects())
+		}
+		return
+	}
+
+	if *pgVersion != "" {
+		fmt.Fprintf(os.Stderr, "%s --pg está depreciado, use --version-tag\n", stWarn.Render("!"))
+		if *versionTag == "" {
+			*versionTag = *pgVersion
+		}
+	}
+
+	if *engineName != "" {
+		if _, ok := Lookup(*engineName); !ok {
+			fmt.Fprintf(os.Stderr, "\n%s %v\n", stErr.Render("✗"), unknownEngineErr(*engineName))
+			os.Exit(1)
+		}
+	}
 
 	var dumpPath string
 	switch flag.NArg() {
@@ -49,7 +75,7 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := run(dumpPath, *pgVersion, *port, *jobs, *dbName, *keep, !*noCounts); err != nil {
+	if err := run(dumpPath, *versionTag, *engineName, *port, *jobs, *dbName, *keep, !*noCounts); err != nil {
 		fmt.Fprintf(os.Stderr, "\n%s %v\n", stErr.Render("✗"), err)
 		os.Exit(1)
 	}
@@ -59,7 +85,7 @@ func step(format string, a ...any) {
 	fmt.Printf("%s %s\n", stAccent.Render("==>"), fmt.Sprintf(format, a...))
 }
 
-func run(path, pgVersion string, port, jobs int, dbName string, keep, exactCounts bool) error {
+func run(path, versionTag, engineName string, port, jobs int, dbName string, keep, exactCounts bool) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -67,114 +93,103 @@ func run(path, pgVersion string, port, jobs int, dbName string, keep, exactCount
 	if err != nil {
 		return err
 	}
-	if err := dockerAvailable(); err != nil {
-		return err
-	}
 
-	info, err := InspectDump(abs)
+	backup, err := InspectDumpAs(abs, engineName)
 	if err != nil {
 		return err
 	}
-	if pgVersion == "" {
-		pgVersion = info.PGMajor
-		if pgVersion == "" {
-			pgVersion = "16"
-		}
+	if backup.Guessed {
+		fmt.Fprintf(os.Stderr, "%s não foi possível identificar o formato do arquivo com confiança; presumindo %s. Use --engine para forçar outra.\n", stWarn.Render("!"), backup.Engine)
 	}
-	if port == 0 {
-		port = freePort()
-	}
-
-	cont := &Container{
-		Name:  fmt.Sprintf("db-verify-%d", os.Getpid()),
-		Image: "postgres:" + pgVersion + "-alpine",
-		Port:  port, DB: dbName, User: "postgres", Pass: "postgres",
+	eng, ok := Lookup(backup.Engine)
+	if !ok {
+		return fmt.Errorf("engine %q não registrada", backup.Engine)
 	}
 
 	fmt.Println()
 	fmt.Println(stTitle.Render("Verify Backup"))
-	fmt.Printf("  %s %s (%s)\n", stLabel.Render("arquivo    :"), abs, humanSize(info.Size))
-	fmt.Printf("  %s %s / compressão %s\n", stLabel.Render("formato    :"), info.Format, info.Compression)
-	if info.OriginDB != "" {
-		fmt.Printf("  %s %s\n", stLabel.Render("banco orig.:"), info.OriginDB)
+	fmt.Printf("  %s %s (%s)\n", stLabel.Render("arquivo    :"), abs, humanSize(backup.Size))
+	fmt.Printf("  %s %s / compressão %s\n", stLabel.Render("formato    :"), backup.Format, backup.Compression)
+	if backup.OriginDB != "" {
+		fmt.Printf("  %s %s\n", stLabel.Render("banco orig.:"), backup.OriginDB)
 	}
-	fmt.Printf("  %s %s → %s\n", stLabel.Render("versão     :"), orDash(info.PGMajor), cont.Image)
+	fmt.Printf("  %s %s (%s)\n", stLabel.Render("versão     :"), orDash(backup.Version), eng.Name())
 	fmt.Println()
 
-	// derruba o container em Ctrl+C também
+	opts := ProvisionOpts{
+		VersionTag: versionTag, Port: port, Jobs: jobs, DBName: dbName,
+		ExactCounts: exactCounts, Progress: step,
+	}
+	sess, err := eng.Provision(ctx, backup, opts)
+	if err != nil {
+		return err
+	}
+
+	// derruba a sessão em Ctrl+C também
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
 		if !keep {
-			cont.Remove()
+			sess.Close()
 		}
 		os.Exit(130)
 	}()
 	defer func() {
 		if keep {
-			fmt.Printf("\n%s container mantido: %s\n", stAccent.Render("==>"), cont.Name)
-			fmt.Printf("    psql:   docker exec -it %s psql -U %s -d %s\n", cont.Name, cont.User, cont.DB)
-			fmt.Printf("    remove: docker rm -f %s\n", cont.Name)
+			hint := sess.ConnectHint()
+			// hint.Name fica vazio para engines sem container (SQLite,
+			// hoje) — nesse caso, o que --keep preserva é o próprio
+			// caminho do arquivo temporário, carregado em DSN.
+			label := hint.Name
+			if label == "" {
+				label = hint.DSN
+			}
+			fmt.Printf("\n%s sessão mantida: %s\n", stAccent.Render("==>"), label)
+			if hint.ExecShell != "" {
+				fmt.Printf("    shell:  %s\n", hint.ExecShell)
+			}
+			if hint.Remove != "" {
+				fmt.Printf("    remove: %s\n", hint.Remove)
+			}
 		} else {
-			cont.Remove()
+			sess.Close()
 		}
 	}()
 
-	step("subindo container %s…", cont.Name)
-	if err := cont.Start(ctx); err != nil {
-		return err
-	}
-	step("aguardando o Postgres ficar pronto…")
-	if err := cont.WaitReady(ctx, 90*time.Second); err != nil {
-		return err
-	}
-	step("copiando dump para o container…")
-	if err := cont.CopyDump(ctx, info); err != nil {
-		return err
-	}
-	step("restaurando (pode demorar)…")
-	res, err := cont.Restore(ctx, info, jobs)
-	if err != nil {
-		return err
-	}
-	if len(res.Errors) == 0 {
-		fmt.Printf("%s restore concluído sem erros em %s\n", stOK.Render("✓"), res.Duration.Round(time.Millisecond))
-	} else {
-		fmt.Printf("%s restore com %d erro(s) em %s\n", stWarn.Render("!"), len(res.Errors), res.Duration.Round(time.Millisecond))
-		for i, e := range res.Errors {
-			if i == 5 {
-				fmt.Printf("    %s\n", stDim.Render(fmt.Sprintf("… mais %d", len(res.Errors)-5)))
-				break
+	if res := sess.Restore(); res != nil {
+		if len(res.Errors) == 0 {
+			fmt.Printf("%s restore concluído sem erros em %s\n", stOK.Render("✓"), res.Duration.Round(time.Millisecond))
+		} else {
+			fmt.Printf("%s restore com %d erro(s) em %s\n", stWarn.Render("!"), len(res.Errors), res.Duration.Round(time.Millisecond))
+			for i, e := range res.Errors {
+				if i == 5 {
+					fmt.Printf("    %s\n", stDim.Render(fmt.Sprintf("… mais %d", len(res.Errors)-5)))
+					break
+				}
+				fmt.Printf("    %s\n", truncate(e, 110))
 			}
-			fmt.Printf("    %s\n", truncate(e, 110))
-		}
-		if res.LogPath != "" {
-			fmt.Printf("    %s\n", stDim.Render("log: "+res.LogPath))
+			if res.LogPath != "" {
+				fmt.Printf("    %s\n", stDim.Render("log: "+res.LogPath))
+			}
 		}
 	}
 
 	step("consultando o banco…")
-	pool, err := Connect(ctx, cont.DSN())
-	if err != nil {
-		return fmt.Errorf("conexão falhou: %w", err)
-	}
-	defer pool.Close()
-
-	health, err := FetchHealth(ctx, pool)
+	health, err := sess.Health(ctx)
 	if err != nil {
 		return err
 	}
-	tables, err := FetchTables(ctx, pool, exactCounts)
+	collections, err := sess.Collections(ctx, exactCounts)
 	if err != nil {
 		return err
 	}
-	if len(tables) == 0 {
-		return fmt.Errorf("o backup não gerou nenhuma tabela — provavelmente está corrompido ou vazio")
+	if len(collections) == 0 {
+		return fmt.Errorf("o backup não gerou nenhuma coleção — provavelmente está corrompido ou vazio")
 	}
 
 	p := tea.NewProgram(
-		newModel(pool, info, cont, res, health, tables),
+		newModel(sess, backup, health, collections),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -182,7 +197,8 @@ func run(path, pgVersion string, port, jobs int, dbName string, keep, exactCount
 		return err
 	}
 
-	fmt.Printf("\n%s conexão para reusar:\n  psql \"%s\"\n", stAccent.Render("==>"), cont.DSN())
+	hint := sess.ConnectHint()
+	fmt.Printf("\n%s conexão para reusar:\n  %s\n", stAccent.Render("==>"), hint.Shell)
 	return nil
 }
 

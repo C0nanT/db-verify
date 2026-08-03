@@ -7,7 +7,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ------------------------------------------------------------------ estilos --
@@ -38,25 +37,28 @@ var (
 // ------------------------------------------------------------------ modelo ---
 
 type queryDoneMsg struct {
-	table TableInfo
-	res   *ResultSet
-	err   error
+	coll Collection
+	res  *ResultSet
+	err  error
 }
 
+// model é agnóstico de engine: fala só com Session e os tipos genéricos
+// (Backup, Health, Collection, ResultSet). Nenhuma referência a Postgres,
+// pgx, SQL ou "schema.tabela" vive aqui.
 type model struct {
-	conn      *pgxpool.Pool
-	info      *DumpInfo
-	cont      *Container
-	restore   *RestoreResult
-	health    *Health
-	allTables []TableInfo
+	sess           Session
+	backup         *Backup
+	hint           ConnectHint
+	restore        *RestoreResult
+	health         *Health
+	allCollections []Collection
 
-	tables  []TableInfo // após filtro
-	cursor  int
-	offset  int
-	filter  string
-	filtOn  bool
-	loading bool
+	collections []Collection // após filtro
+	cursor      int
+	offset      int
+	filter      string
+	filtOn      bool
+	loading     bool
 
 	res     *ResultSet
 	resFor  string
@@ -73,7 +75,7 @@ const (
 	nameGutter  = 18 // espaço reservado para LINHAS + TAMANHO
 )
 
-// listW: largura do painel de tabelas, adaptada ao terminal.
+// listW: largura do painel de coleções, adaptada ao terminal.
 func (m *model) listW() int {
 	w := m.width / 3
 	if w > 56 {
@@ -85,27 +87,29 @@ func (m *model) listW() int {
 	return w
 }
 
-func newModel(conn *pgxpool.Pool, info *DumpInfo, cont *Container, r *RestoreResult, h *Health, tables []TableInfo) *model {
-	m := &model{conn: conn, info: info, cont: cont, restore: r, health: h,
-		allTables: tables, tables: tables, width: 100, height: 30}
+func newModel(sess Session, backup *Backup, health *Health, collections []Collection) *model {
+	m := &model{
+		sess: sess, backup: backup, hint: sess.ConnectHint(), restore: sess.Restore(), health: health,
+		allCollections: collections, collections: collections, width: 100, height: 30,
+	}
 	return m
 }
 
 func (m *model) Init() tea.Cmd { return m.loadCurrent() }
 
-// loadCurrent dispara a consulta dos 20 mais recentes da tabela sob o cursor.
+// loadCurrent dispara a consulta dos 20 mais recentes da coleção sob o cursor.
 func (m *model) loadCurrent() tea.Cmd {
-	if len(m.tables) == 0 {
+	if len(m.collections) == 0 {
 		return nil
 	}
-	t := m.tables[m.cursor]
-	if t.Qualified() == m.resFor && m.res != nil {
+	c := m.collections[m.cursor]
+	if c.Qualified() == m.resFor && m.res != nil {
 		return nil
 	}
 	m.loading = true
 	return func() tea.Msg {
-		res, err := RunQuery(context.Background(), m.conn, t.RecentQuery())
-		return queryDoneMsg{table: t, res: res, err: err}
+		res, err := m.sess.Recent(context.Background(), c)
+		return queryDoneMsg{coll: c, res: res, err: err}
 	}
 }
 
@@ -130,7 +134,7 @@ func (m *model) visibleRows() int {
 func (m *model) rowAtY(y int) (int, bool) {
 	first := headerLines + 2 // borda superior + cabeçalho de colunas
 	idx := m.offset + (y - first)
-	if y < first || idx < 0 || idx >= len(m.tables) || idx-m.offset >= m.visibleRows() {
+	if y < first || idx < 0 || idx >= len(m.collections) || idx-m.offset >= m.visibleRows() {
 		return 0, false
 	}
 	return idx, true
@@ -140,8 +144,8 @@ func (m *model) clampCursor() {
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
-	if m.cursor >= len(m.tables) {
-		m.cursor = len(m.tables) - 1
+	if m.cursor >= len(m.collections) {
+		m.cursor = len(m.collections) - 1
 	}
 	if m.cursor < 0 {
 		m.cursor = 0
@@ -160,13 +164,13 @@ func (m *model) clampCursor() {
 
 func (m *model) applyFilter() {
 	if m.filter == "" {
-		m.tables = m.allTables
+		m.collections = m.allCollections
 	} else {
 		f := strings.ToLower(m.filter)
-		m.tables = nil
-		for _, t := range m.allTables {
-			if strings.Contains(strings.ToLower(t.Qualified()), f) {
-				m.tables = append(m.tables, t)
+		m.collections = nil
+		for _, c := range m.allCollections {
+			if strings.Contains(strings.ToLower(c.Qualified()), f) {
+				m.collections = append(m.collections, c)
 			}
 		}
 	}
@@ -181,7 +185,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case queryDoneMsg:
 		m.loading = false
-		m.res, m.resErr, m.resFor, m.hscroll = msg.res, msg.err, msg.table.Qualified(), 0
+		m.res, m.resErr, m.resFor, m.hscroll = msg.res, msg.err, msg.coll.Qualified(), 0
 
 	case tea.MouseMsg:
 		if msg.Action != tea.MouseActionPress {
@@ -273,7 +277,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampCursor()
 			return m, m.loadCurrent()
 		case "end", "G":
-			m.cursor = len(m.tables) - 1
+			m.cursor = len(m.collections) - 1
 			m.clampCursor()
 			return m, m.loadCurrent()
 		case "enter", "ctrl+j", "r":
@@ -309,28 +313,29 @@ func (m *model) viewHeader() string {
 	if m.restore != nil && len(m.restore.Errors) > 0 {
 		status = stWarn.Render(fmt.Sprintf("! %d erro(s) no restore", len(m.restore.Errors)))
 	}
-	origin := m.info.OriginDB
+	origin := m.backup.OriginDB
 	if origin == "" {
 		origin = "?"
 	}
 	l1 := fmt.Sprintf("%s  %s  %s",
 		stTitle.Render("Verify Backup"),
 		stDim.Render("·"),
-		stValue.Render(shortPath(m.info.Path, m.width-24)))
+		stValue.Render(shortPath(m.backup.Path, m.width-24)))
 	l2 := fmt.Sprintf("%s %s   %s %s   %s %s   %s %s   %s",
 		stLabel.Render("origem:"), stValue.Render(origin),
-		stLabel.Render("pg:"), stValue.Render(m.cont.Image),
-		stLabel.Render("formato:"), stValue.Render(m.info.Format),
-		stLabel.Render("dump:"), stValue.Render(humanSize(m.info.Size)),
+		stLabel.Render("engine:"), stValue.Render(m.backup.Engine+" "+orDash(m.backup.Version)),
+		stLabel.Render("formato:"), stValue.Render(m.backup.Format),
+		stLabel.Render("backup:"), stValue.Render(humanSize(m.backup.Size)),
 		status)
-	l3 := fmt.Sprintf("%s %s   %s %d   %s %d   %s %d   %s %d   %s %d   %s %s",
-		stLabel.Render("tamanho:"), stValue.Render(m.health.Size),
-		stLabel.Render("tabelas:"), m.health.Tables,
-		stLabel.Render("views:"), m.health.Views,
-		stLabel.Render("índices:"), m.health.Indexes,
-		stLabel.Render("funções:"), m.health.Funcs,
-		stLabel.Render("fks:"), m.health.FKs,
-		stLabel.Render("porta:"), stAccent.Render(fmt.Sprint(m.cont.Port)))
+
+	fields := []string{fmt.Sprintf("%s %s", stLabel.Render("tamanho:"), stValue.Render(m.health.Size))}
+	for _, f := range m.health.Fields {
+		fields = append(fields, fmt.Sprintf("%s %s", stLabel.Render(f.Label+":"), stValue.Render(f.Value)))
+	}
+	if m.hint.Port != 0 {
+		fields = append(fields, fmt.Sprintf("%s %s", stLabel.Render("porta:"), stAccent.Render(fmt.Sprint(m.hint.Port))))
+	}
+	l3 := strings.Join(fields, "   ")
 
 	return stBox.Width(m.width - 2).Render(strings.Join([]string{l1, l2, l3}, "\n"))
 }
@@ -342,18 +347,14 @@ func (m *model) viewList() string {
 	lines := []string{stColHdr.Render(title)}
 
 	vis := m.visibleRows()
-	for i := m.offset; i < len(m.tables) && i < m.offset+vis; i++ {
-		t := m.tables[i]
-		name := t.Qualified()
-		if t.Schema == "public" {
-			name = t.Name
-		}
-		name = truncate(name, nameW)
-		row := fmt.Sprintf("%-*s %7d %9s", nameW, name, t.Rows, shortSize(t.Size))
+	for i := m.offset; i < len(m.collections) && i < m.offset+vis; i++ {
+		c := m.collections[i]
+		name := truncate(c.Qualified(), nameW)
+		row := fmt.Sprintf("%-*s %7d %9s", nameW, name, c.Count, shortSize(c.Size))
 		switch {
 		case i == m.cursor:
 			row = stSel.Render(row)
-		case t.Rows == 0:
+		case c.Count == 0:
 			row = stDim.Render(row)
 		}
 		lines = append(lines, row)
@@ -364,7 +365,7 @@ func (m *model) viewList() string {
 	if m.filtOn || m.filter != "" {
 		lines = append(lines, stAccent.Render("/"+m.filter+"▌"))
 	} else {
-		lines = append(lines, stDim.Render(fmt.Sprintf("%d tabelas", len(m.tables))))
+		lines = append(lines, stDim.Render(fmt.Sprintf("%d tabelas", len(m.collections))))
 	}
 	return stBox.Width(m.listW() - 2).Height(m.bodyHeight() - 2).Render(strings.Join(lines, "\n"))
 }
@@ -376,21 +377,19 @@ func (m *model) viewResult() string {
 	}
 	h := m.bodyHeight() - 2
 
-	if len(m.tables) == 0 {
+	if len(m.collections) == 0 {
 		return stBox.Width(w - 2).Height(h).Render(stDim.Render("nenhuma tabela"))
 	}
-	t := m.tables[m.cursor]
+	c := m.collections[m.cursor]
 
-	head := stTitle.Render("20 mais recentes · " + t.Qualified())
-	origin := stDim.Render("sem coluna de ordenação")
-	if t.OrderCol != "" {
-		kind := "PK"
-		if t.ByDate {
-			kind = "data"
-		}
-		origin = stDim.Render(fmt.Sprintf("ordenado por %s (%s)", t.OrderCol, kind))
+	head := stTitle.Render("20 mais recentes · " + c.Qualified())
+	hint := stDim.Render(c.Hint)
+
+	queryText := c.Preview
+	if m.res != nil && m.resFor == c.Qualified() {
+		queryText = m.res.Query
 	}
-	sql := stAccent.Render(truncate(t.RecentQuery(), w-4))
+	queryLine := stAccent.Render(truncate(queryText, w-4))
 
 	var bodyLines []string
 	switch {
@@ -403,7 +402,7 @@ func (m *model) viewResult() string {
 	default:
 		bodyLines = renderTable(m.res, w-4, h-4, m.hscroll)
 	}
-	lines := append([]string{head, origin, sql, ""}, bodyLines...)
+	lines := append([]string{head, hint, queryLine, ""}, bodyLines...)
 	return stBox.Width(w - 2).Height(h).Render(strings.Join(lines, "\n"))
 }
 

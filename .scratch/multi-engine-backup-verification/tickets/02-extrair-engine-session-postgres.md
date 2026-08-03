@@ -41,18 +41,18 @@ seguintes usarem no seu próprio dialeto.
 
 **Blocked by:** 01 — Testes de caracterização do comportamento Postgres atual.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Existe um registry onde engines se registram e podem ser buscadas por nome
-- [ ] Postgres é a única engine registrada, implementando `Engine` e `Session`
-- [ ] `main.go` orquestra o fluxo falando apenas com o registry e as interfaces
-- [ ] A TUI não referencia Postgres, `pgx`, SQL ou "schema.tabela" em lugar nenhum
-- [ ] A TUI monta a consulta de recentes chamando `Session.Recent` com a `Collection`,
+- [x] Existe um registry onde engines se registram e podem ser buscadas por nome
+- [x] Postgres é a única engine registrada, implementando `Engine` e `Session`
+- [x] `main.go` orquestra o fluxo falando apenas com o registry e as interfaces
+- [x] A TUI não referencia Postgres, `pgx`, SQL ou "schema.tabela" em lugar nenhum
+- [x] A TUI monta a consulta de recentes chamando `Session.Recent` com a `Collection`,
       nunca construindo SQL
-- [ ] O resultado do restore (erros, duração, log, exit code) é carregado pela `Session`
+- [x] O resultado do restore (erros, duração, log, exit code) é carregado pela `Session`
       e lido pela TUI
-- [ ] O cabeçalho de saúde é renderizado a partir da lista de pares que a engine publica
-- [ ] Verificar um `.dump` Postgres produz exatamente a mesma tela e a mesma saída de
+- [x] O cabeçalho de saúde é renderizado a partir da lista de pares que a engine publica
+- [x] Verificar um `.dump` Postgres produz exatamente a mesma tela e a mesma saída de
       terminal de antes deste ticket
-- [ ] Toda a suíte do ticket 01 continua verde, com as asserções intactas — só as
+- [x] Toda a suíte do ticket 01 continua verde, com as asserções intactas — só as
       chamadas se adaptam às novas assinaturas
