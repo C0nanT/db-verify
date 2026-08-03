@@ -12,14 +12,14 @@ dele, sem nunca duplicar a lista de comandos.
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] `scripts/check fast` sai com 0 numa árvore saudável
-- [ ] Executa formatação → `go vet` → `go test ./...` (sem tag `docker`), nessa ordem
-- [ ] Para na primeira falha; não roda as etapas seguintes
-- [ ] Arquivo Go desformatado → exit ≠ 0, saída lista os arquivos e indica `gofmt -w`
-- [ ] Teste unitário quebrado → exit ≠ 0, mensagem final identifica a etapa como unit
-- [ ] Saída bruta de `go vet` e `go test` continua visível (não é engolida)
-- [ ] Mesmo resultado quando invocado de dentro de um subdiretório do repo
-- [ ] Nível desconhecido ou ausente → erro claro em pt-BR listando os níveis válidos
-- [ ] Mensagens ao humano em pt-BR; nomes de arquivo e flags em inglês
+- [x] `scripts/check fast` sai com 0 numa árvore saudável
+- [x] Executa formatação → `go vet` → `go test ./...` (sem tag `docker`), nessa ordem
+- [x] Para na primeira falha; não roda as etapas seguintes
+- [x] Arquivo Go desformatado → exit ≠ 0, saída lista os arquivos e indica `gofmt -w`
+- [x] Teste unitário quebrado → exit ≠ 0, mensagem final identifica a etapa como unit
+- [x] Saída bruta de `go vet` e `go test` continua visível (não é engolida)
+- [x] Mesmo resultado quando invocado de dentro de um subdiretório do repo
+- [x] Nível desconhecido ou ausente → erro claro em pt-BR listando os níveis válidos
+- [x] Mensagens ao humano em pt-BR; nomes de arquivo e flags em inglês

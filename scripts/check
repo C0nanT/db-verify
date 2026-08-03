@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Ponto de entrada único dos gates de qualidade. Ver .scratch/quality-gates/SPEC.md.
+#
+# Uso: scripts/check <nível>
+#   fast — formatação, go vet e testes unitários (sem Docker)
+#
+# Funciona a partir de qualquer subdiretório do repo.
+
+set -uo pipefail
+
+VALID_LEVELS=(fast)
+
+usage_error() {
+  echo "Erro: nível ausente ou inválido." >&2
+  echo "Uso: scripts/check <nível>" >&2
+  echo "Níveis válidos: ${VALID_LEVELS[*]}" >&2
+  exit 1
+}
+
+level="${1:-}"
+if [[ -z "$level" ]]; then
+  usage_error
+fi
+
+level_valid=false
+for candidate in "${VALID_LEVELS[@]}"; do
+  if [[ "$candidate" == "$level" ]]; then
+    level_valid=true
+    break
+  fi
+done
+if [[ "$level_valid" != true ]]; then
+  usage_error
+fi
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "Erro: scripts/check precisa ser executado dentro de um repositório git." >&2
+  exit 1
+}
+cd "$repo_root" || exit 1
+
+check_format() {
+  local unformatted
+  unformatted="$(gofmt -l .)"
+  if [[ -n "$unformatted" ]]; then
+    echo "Formatação falhou. Arquivos divergentes de gofmt:" >&2
+    echo "$unformatted" >&2
+    echo "Corrija com: gofmt -w <arquivo>" >&2
+    return 1
+  fi
+  return 0
+}
+
+check_vet() {
+  go vet ./...
+}
+
+check_unit() {
+  go test ./...
+}
+
+failed_stage=""
+
+run_fast() {
+  echo "==> [fast] formatação (gofmt)"
+  if ! check_format; then
+    failed_stage="format"
+    return 1
+  fi
+
+  echo "==> [fast] análise estática (go vet)"
+  if ! check_vet; then
+    failed_stage="vet"
+    return 1
+  fi
+
+  echo "==> [fast] testes unitários (go test)"
+  if ! check_unit; then
+    failed_stage="unit"
+    return 1
+  fi
+
+  return 0
+}
+
+case "$level" in
+  fast)
+    run_fast
+    ;;
+esac
+exit_code=$?
+
+if [[ $exit_code -eq 0 ]]; then
+  echo "Gate '$level' passou."
+else
+  echo "Gate '$level' falhou na etapa: $failed_stage"
+fi
+
+exit $exit_code
