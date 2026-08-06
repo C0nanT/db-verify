@@ -3,6 +3,8 @@
 #
 # Uso: scripts/check <nível>
 #   fast — formatação, go vet, lint, secrets scan (gitleaks) e testes unitários (sem Docker)
+#   full — tudo do fast, mais preflight do daemon Docker e a suite de conformidade
+#          (go test -tags docker ./...)
 #
 # Ferramentas do gate são tool dependencies do go.mod (diretiva `tool`, invocadas via
 # `go tool <nome>`), pinadas junto com as demais dependências. Comando único que
@@ -12,7 +14,7 @@
 
 set -uo pipefail
 
-VALID_LEVELS=(fast)
+VALID_LEVELS=(fast full)
 
 usage_error() {
   echo "Erro: nível ausente ou inválido." >&2
@@ -101,6 +103,18 @@ check_unit() {
   go test ./...
 }
 
+check_docker_preflight() {
+  if ! docker info >/dev/null 2>&1; then
+    echo "Docker não respondeu. Inicie o daemon Docker e tente novamente." >&2
+    return 1
+  fi
+  return 0
+}
+
+check_docker_suite() {
+  go test -tags docker ./...
+}
+
 failed_stage=""
 
 run_fast() {
@@ -137,9 +151,32 @@ run_fast() {
   return 0
 }
 
+run_full() {
+  if ! run_fast; then
+    return 1
+  fi
+
+  echo "==> [full] preflight do Docker"
+  if ! check_docker_preflight; then
+    failed_stage="docker"
+    return 1
+  fi
+
+  echo "==> [full] suite de conformidade (go test -tags docker)"
+  if ! check_docker_suite; then
+    failed_stage="docker"
+    return 1
+  fi
+
+  return 0
+}
+
 case "$level" in
   fast)
     run_fast
+    ;;
+  full)
+    run_full
     ;;
 esac
 exit_code=$?

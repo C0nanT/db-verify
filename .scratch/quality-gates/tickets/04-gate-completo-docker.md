@@ -9,13 +9,13 @@ de deixar a suite estourar com erro obscuro ou — pior — passar batido.
 
 **Blocked by:** 01 — Ponto de entrada `scripts/check` com o gate rápido base
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] `scripts/check full` executa todas as etapas do nível `fast` antes das de integração
-- [ ] Preflight do daemon Docker roda **antes** da suite pesada
-- [ ] Daemon parado → exit ≠ 0 com mensagem em pt-BR pedindo o Docker; suite não é iniciada
-- [ ] Nunca pula a suite em silêncio quando o Docker está indisponível
-- [ ] Com Docker ok, roda `go test -tags docker ./...`
-- [ ] Suite de conformidade vermelha → exit ≠ 0, etapa identificada como docker
-- [ ] Árvore saudável com Docker ligado → exit 0
-- [ ] Falha no nível rápido aborta antes de qualquer container subir
+- [x] `scripts/check full` executa todas as etapas do nível `fast` antes das de integração
+- [x] Preflight do daemon Docker roda **antes** da suite pesada
+- [x] Daemon parado → exit ≠ 0 com mensagem em pt-BR pedindo o Docker; suite não é iniciada
+- [x] Nunca pula a suite em silêncio quando o Docker está indisponível
+- [x] Com Docker ok, roda `go test -tags docker ./...`
+- [x] Suite de conformidade vermelha → exit ≠ 0, etapa identificada como docker
+- [x] Árvore saudável com Docker ligado → exit 0
+- [x] Falha no nível rápido aborta antes de qualquer container subir

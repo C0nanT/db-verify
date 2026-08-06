@@ -201,6 +201,69 @@ code=$?
 assert_eq "subdiretório -> exit 0" "0" "$code"
 rm -rf "$repo"
 
+# Fabrica um `docker` fake no PATH, para exercitar o preflight sem depender de um
+# daemon real. $1 = exit code que `docker info` deve devolver.
+fake_docker_bin() {
+  local exit_code="$1" dir
+  dir="$(mktemp -d)"
+  cat > "$dir/docker" <<EOF
+#!/usr/bin/env bash
+if [[ "\$1" == "info" ]]; then
+  exit ${exit_code}
+fi
+exit 0
+EOF
+  chmod +x "$dir/docker"
+  echo "$dir"
+}
+
+# Cenário 7: full com Docker parado -> exit != 0, etapa docker, mensagem em pt-BR,
+# suite pesada não roda (sem "testes unitários" repetido nem saída de go test -tags docker)
+repo="$(new_fixture_repo)"
+fake_bin="$(fake_docker_bin 1)"
+out="$(cd "$repo" && PATH="$fake_bin:$PATH" "$CHECK_SCRIPT" full 2>&1)"
+code=$?
+assert_eq "full com Docker parado -> exit != 0" "1" "$([[ $code -ne 0 ]] && echo 1 || echo 0)"
+assert_contains "menciona Docker parado" "$out" "Docker não respondeu"
+assert_last_line "última linha identifica etapa docker" "$out" "docker"
+if [[ "$out" == *"suite de conformidade"* ]]; then
+  echo "FALHOU: Docker parado não deveria iniciar a suite de conformidade"
+  failures=$((failures + 1))
+else
+  echo "ok: Docker parado não inicia a suite de conformidade"
+fi
+rm -rf "$repo" "$fake_bin"
+
+# Cenário 8: full com árvore saudável e Docker respondendo -> exit 0
+repo="$(new_fixture_repo)"
+fake_bin="$(fake_docker_bin 0)"
+out="$(cd "$repo" && PATH="$fake_bin:$PATH" "$CHECK_SCRIPT" full 2>&1)"
+code=$?
+assert_eq "full com Docker ok -> exit 0" "0" "$code"
+rm -rf "$repo" "$fake_bin"
+
+# Cenário 9: falha no nível fast (formatação) com `full` -> aborta antes do preflight Docker,
+# nenhum container sobe
+repo="$(new_fixture_repo)"
+cat > "$repo/bad.go" <<'EOF'
+package main
+func Bad() {
+      return
+}
+EOF
+fake_bin="$(fake_docker_bin 0)"
+out="$(cd "$repo" && PATH="$fake_bin:$PATH" "$CHECK_SCRIPT" full 2>&1)"
+code=$?
+assert_eq "full com fast quebrado -> exit != 0" "1" "$([[ $code -ne 0 ]] && echo 1 || echo 0)"
+assert_last_line "última linha identifica etapa format, não docker" "$out" "format"
+if [[ "$out" == *"preflight do Docker"* ]]; then
+  echo "FALHOU: falha no nível fast não deveria chegar ao preflight do Docker"
+  failures=$((failures + 1))
+else
+  echo "ok: falha no nível fast aborta antes do preflight do Docker"
+fi
+rm -rf "$repo" "$fake_bin"
+
 echo
 if [[ "$failures" -eq 0 ]]; then
   echo "Todos os cenários passaram."
