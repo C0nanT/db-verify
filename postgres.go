@@ -103,8 +103,15 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 	}
 
 	opts.report("subindo container %s (imagem %s)…", cont.Name, cont.Image)
-	if err := cont.Start(ctx); err != nil {
+	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+		cont.Port = p
+		return cont.Start(ctx)
+	})
+	if err != nil {
 		return nil, err
+	}
+	if finalPort != port {
+		opts.report("porta %d livre, usando essa…", finalPort)
 	}
 	opts.report("aguardando o Postgres ficar pronto…")
 	if err := cont.WaitReady(ctx, 90*time.Second); err != nil {
@@ -189,13 +196,30 @@ func (c *pgContainer) Start(ctx context.Context) error {
 	return nil
 }
 
+// WaitReady espera pg_isready responder duas vezes seguidas, com um respiro
+// entre elas — a imagem oficial sobe um "servidor temporário" (sem rede,
+// só socket Unix) para rodar os scripts de inicialização e só depois
+// reinicia para o servidor real; um pg_isready bem-sucedido contra o
+// temporário dá falso positivo (o restore em seguida falha com "No such
+// file or directory" no socket, no meio do reinício). A segunda checagem,
+// mesmo padrão do MySQL/MariaDB (ver mysql.go), evita isso.
 func (c *pgContainer) WaitReady(ctx context.Context, timeout time.Duration) error {
+	check := func() bool {
+		return exec.CommandContext(ctx, "docker", "exec", c.Name,
+			"pg_isready", "-U", c.User, "-d", c.DB).Run() == nil
+	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		err := exec.CommandContext(ctx, "docker", "exec", c.Name,
-			"pg_isready", "-U", c.User, "-d", c.DB).Run()
-		if err == nil {
-			return nil
+		if check() {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
+			if check() {
+				return nil
+			}
+			continue
 		}
 		select {
 		case <-ctx.Done():

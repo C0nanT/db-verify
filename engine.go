@@ -1,9 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"os/exec"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -204,4 +210,135 @@ func freePortFrom(start int) int {
 		}
 	}
 	return start
+}
+
+// maxPortRetries é quantas portas seguidas startWithPortRetry tenta antes de
+// desistir e oferecer ao operador para derrubar um container. freePort/
+// freePortFrom já evitam a maioria dos conflitos verificando o host antes de
+// subir o container, mas ainda existe uma janela de corrida entre esse
+// check e o docker de fato publicar a porta — e o operador pode ter passado
+// --port explicitamente, pulando o scan. startWithPortRetry cobre os dois
+// casos.
+const maxPortRetries = 5
+
+// isPortConflict reconhece, na mensagem de erro do docker, que a falha foi
+// por a porta já estar em uso (por outro container ou processo) — para
+// distinguir de qualquer outra falha de start, que não deve ser retentada.
+func isPortConflict(msg string) bool {
+	low := strings.ToLower(msg)
+	return strings.Contains(low, "port is already allocated") ||
+		strings.Contains(low, "address already in use") ||
+		(strings.Contains(low, "bind for") && strings.Contains(low, "failed"))
+}
+
+// startWithPortRetry chama attempt(port), começando em startPort. Quando
+// attempt falha por conflito de porta, remove o que sobrou do container
+// (nome fixo por processo — precisa estar livre para a próxima tentativa
+// reusar) e tenta de novo na porta seguinte, até maxPortRetries vezes.
+// Qualquer falha que não seja conflito de porta volta na hora, sem retry.
+//
+// Se as tentativas se esgotarem, oferece ao operador (via offerToFreePort)
+// derrubar um dos containers docker que já estão publicando portas nessa
+// faixa; se ele derrubar um, tenta a faixa inteira de novo.
+func startWithPortRetry(ctx context.Context, name string, startPort int, attempt func(port int) error) (int, error) {
+	port := startPort
+	var lastErr error
+	tried := make([]int, 0, maxPortRetries)
+	for i := 0; i < maxPortRetries; i++ {
+		tried = append(tried, port)
+		err := attempt(port)
+		if err == nil {
+			return port, nil
+		}
+		if !isPortConflict(err.Error()) {
+			return 0, err
+		}
+		lastErr = err
+		exec.CommandContext(ctx, "docker", "rm", "-f", name).Run() //nolint:errcheck // best-effort; pode nem ter chegado a existir
+		fmt.Fprintf(os.Stderr, "%s porta %d já em uso, tentando %d…\n", stWarn.Render("!"), port, port+1)
+		port++
+	}
+
+	freed, err := offerToFreePort(ctx, tried, lastErr)
+	if err != nil {
+		return 0, err
+	}
+	if !freed {
+		return 0, fmt.Errorf("nenhuma porta livre entre %d e %d: %w", tried[0], tried[len(tried)-1], lastErr)
+	}
+	return startWithPortRetry(ctx, name, startPort, attempt)
+}
+
+// portUser é uma linha de "docker ps" filtrada por publicar uma das portas
+// que startWithPortRetry tentou e não conseguiu.
+type portUser struct {
+	Name  string
+	Image string
+	Ports string
+}
+
+// containersUsingPorts lista, sem duplicar, os containers docker que
+// publicam qualquer uma das portas em ports.
+func containersUsingPorts(ctx context.Context, ports []int) ([]portUser, error) {
+	seen := map[string]portUser{}
+	for _, p := range ports {
+		out, err := exec.CommandContext(ctx, "docker", "ps",
+			"--filter", fmt.Sprintf("publish=%d", p),
+			"--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Ports}}").Output()
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line == "" {
+				continue
+			}
+			f := strings.SplitN(line, "\t", 4)
+			if len(f) != 4 {
+				continue
+			}
+			seen[f[0]] = portUser{Name: f[1], Image: f[2], Ports: f[3]}
+		}
+	}
+	out := make([]portUser, 0, len(seen))
+	for _, v := range seen {
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// offerToFreePort lista os containers docker ocupando as portas em tried e
+// pergunta ao operador, no terminal, se algum deles pode ser derrubado.
+// Devolve true quando um container foi derrubado (a chamada deve tentar de
+// novo); false quando o operador cancelou ou não há nada pra listar (a
+// chamada deve reportar cause como o erro final).
+func offerToFreePort(ctx context.Context, tried []int, cause error) (bool, error) {
+	containers, err := containersUsingPorts(ctx, tried)
+	if err != nil || len(containers) == 0 {
+		return false, nil
+	}
+
+	fmt.Println()
+	fmt.Printf("%s %d tentativas de porta (%d–%d) falharam; containers docker publicando portas nessa faixa:\n",
+		stWarn.Render("!"), len(tried), tried[0], tried[len(tried)-1])
+	for i, c := range containers {
+		fmt.Printf("  [%d] %-30s %-25s %s\n", i+1, c.Name, c.Image, c.Ports)
+	}
+	fmt.Print("número do container para derrubar (enter cancela): ")
+
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false, nil
+	}
+	idx, convErr := strconv.Atoi(line)
+	if convErr != nil || idx < 1 || idx > len(containers) {
+		return false, fmt.Errorf("opção inválida: %q", line)
+	}
+	chosen := containers[idx-1]
+	fmt.Printf("derrubando %s…\n", chosen.Name)
+	if out, err := exec.CommandContext(ctx, "docker", "rm", "-f", chosen.Name).CombinedOutput(); err != nil {
+		return false, fmt.Errorf("falha ao derrubar %s: %s", chosen.Name, strings.TrimSpace(string(out)))
+	}
+	return true, nil
 }

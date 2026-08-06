@@ -108,8 +108,15 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 	}
 
 	opts.report("subindo container %s (imagem %s)…", cont.Name, cont.Image)
-	if err := cont.Start(ctx); err != nil {
+	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+		cont.Port = p
+		return cont.Start(ctx)
+	})
+	if err != nil {
 		return nil, err
+	}
+	if finalPort != port {
+		opts.report("porta %d livre, usando essa…", finalPort)
 	}
 	opts.report("aguardando o MariaDB ficar pronto…")
 	if err := cont.WaitReady(ctx, 120*time.Second); err != nil {

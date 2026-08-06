@@ -131,18 +131,28 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	}
 
 	opts.report("criando container %s (imagem %s)…", cont.Name, cont.Image)
-	if err := cont.Create(ctx); err != nil {
+	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+		cont.Port = p
+		if err := cont.Create(ctx); err != nil {
+			return err
+		}
+		opts.report("posicionando o RDB no datadir (antes do servidor subir)…")
+		if err := cont.CopyDump(ctx, b); err != nil {
+			cont.Remove()
+			return err
+		}
+		opts.report("subindo o Redis…")
+		if err := cont.StartContainer(ctx); err != nil {
+			cont.Remove()
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	opts.report("posicionando o RDB no datadir (antes do servidor subir)…")
-	if err := cont.CopyDump(ctx, b); err != nil {
-		cont.Remove()
-		return nil, err
-	}
-	opts.report("subindo o Redis…")
-	if err := cont.StartContainer(ctx); err != nil {
-		cont.Remove()
-		return nil, err
+	if finalPort != port {
+		opts.report("porta %d livre, usando essa…", finalPort)
 	}
 	opts.report("aguardando o Redis carregar o RDB…")
 	res := cont.WaitReady(ctx, 30*time.Second)

@@ -152,8 +152,15 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	}
 
 	opts.report("subindo container %s (imagem %s)…", cont.Name, cont.Image)
-	if err := cont.Start(ctx); err != nil {
+	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+		cont.Port = p
+		return cont.Start(ctx)
+	})
+	if err != nil {
 		return nil, err
+	}
+	if finalPort != port {
+		opts.report("porta %d livre, usando essa…", finalPort)
 	}
 	// O Mongo demora mais para ficar pronto que as demais engines (ticket
 	// 09: "o timeout de 'ficar pronto' é específico do Mongo") — imagem
