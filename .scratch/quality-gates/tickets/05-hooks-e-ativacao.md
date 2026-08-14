@@ -12,15 +12,15 @@ comando de qualidade é redeclarado dentro deles.
 
 **Blocked by:** 01 — Ponto de entrada `scripts/check` com o gate rápido base; 04 — Nível `full`: preflight de Docker e suite de conformidade
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Hooks versionados no repositório, em diretório dedicado
-- [ ] `pre-commit` apenas invoca o nível rápido; `pre-push` apenas invoca o nível completo
-- [ ] Nenhuma lista de comandos de qualidade duplicada dentro dos hooks
-- [ ] Comando único de setup aponta o git do clone para os hooks versionados
-- [ ] Setup é local ao repo; `git config --global` não é alterado
-- [ ] Commit com formatação quebrada aborta; commit com árvore limpa passa
-- [ ] Push com Docker parado aborta com a mensagem sobre o daemon
-- [ ] Push com suite de conformidade verde passa
-- [ ] Gates rodam independentemente de quais paths estão staged
-- [ ] Hooks são executáveis e funcionam a partir de qualquer subdiretório
+- [x] Hooks versionados no repositório, em diretório dedicado
+- [x] `pre-commit` apenas invoca o nível rápido; `pre-push` apenas invoca o nível completo
+- [x] Nenhuma lista de comandos de qualidade duplicada dentro dos hooks
+- [x] Comando único de setup aponta o git do clone para os hooks versionados
+- [x] Setup é local ao repo; `git config --global` não é alterado
+- [x] Commit com formatação quebrada aborta; commit com árvore limpa passa
+- [x] Push com Docker parado aborta com a mensagem sobre o daemon
+- [x] Push com suite de conformidade verde passa
+- [x] Gates rodam independentemente de quais paths estão staged
+- [x] Hooks são executáveis e funcionam a partir de qualquer subdiretório

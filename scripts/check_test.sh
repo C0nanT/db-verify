@@ -264,6 +264,74 @@ else
 fi
 rm -rf "$repo" "$fake_bin"
 
+commit_fixture() {
+  local dir="$1"
+  (
+    cd "$dir"
+    git add -A
+    git -c commit.gpgsign=false commit -qm "fixture"
+  )
+}
+
+# Cenário 10: nível ci numa árvore saudável -> exit 0 (inclui extras de servidor)
+repo="$(new_fixture_repo)"
+(
+  cd "$repo"
+  go mod tidy
+)
+commit_fixture "$repo"
+out="$(cd "$repo" && "$CHECK_SCRIPT" ci 2>&1)"
+code=$?
+assert_eq "ci árvore saudável -> exit 0" "0" "$code"
+assert_contains "ci roda govulncheck" "$out" "govulncheck"
+assert_contains "ci verifica go.mod limpo" "$out" "go mod tidy"
+assert_contains "ci compila o binário" "$out" "go build"
+rm -rf "$repo"
+
+# Cenário 11: ci com require fantasma commitado que tidy removeria -> etapa tidy
+repo="$(new_fixture_repo)"
+(
+  cd "$repo"
+  go mod tidy
+  printf '\nrequire github.com/xyproto/randomstring v1.0.5\n' >> go.mod
+)
+commit_fixture "$repo"
+out="$(cd "$repo" && "$CHECK_SCRIPT" ci 2>&1)"
+code=$?
+assert_eq "ci com go.mod sujo -> exit != 0" "1" "$([[ $code -ne 0 ]] && echo 1 || echo 0)"
+assert_last_line "última linha identifica etapa tidy" "$out" "tidy"
+rm -rf "$repo"
+
+# Cenário 12: nível docker com Docker parado -> exit != 0, etapa docker, sem rerodar fast
+repo="$(new_fixture_repo)"
+fake_bin="$(fake_docker_bin 1)"
+out="$(cd "$repo" && PATH="$fake_bin:$PATH" "$CHECK_SCRIPT" docker 2>&1)"
+code=$?
+assert_eq "docker com daemon parado -> exit != 0" "1" "$([[ $code -ne 0 ]] && echo 1 || echo 0)"
+assert_last_line "docker: última linha identifica etapa docker" "$out" "docker"
+if [[ "$out" == *"formatação (gofmt)"* ]]; then
+  echo "FALHOU: nível docker não deveria rerodar o gate fast"
+  failures=$((failures + 1))
+else
+  echo "ok: nível docker não reroda o gate fast"
+fi
+rm -rf "$repo" "$fake_bin"
+
+# Cenário 13: CI=true usa `gitleaks git` (histórico), não --staged
+repo="$(new_fixture_repo)"
+printf '%s\n' 'aws_access_key_id = AKIAJG74V2RRT4XVRMSA' > "$repo/planted-secret.env"
+(
+  cd "$repo"
+  git add planted-secret.env
+  git -c commit.gpgsign=false commit -qm "plant"
+  # deixa o arquivo no tree commitado; scan git no CI pega o histórico
+)
+out="$(cd "$repo" && CI=true "$CHECK_SCRIPT" fast 2>&1)"
+code=$?
+assert_eq "CI=true pega segredo no git -> exit != 0" "1" "$([[ $code -ne 0 ]] && echo 1 || echo 0)"
+assert_last_line "CI secrets identifica etapa secrets" "$out" "secrets"
+rm -rf "$repo"
+
 echo
 if [[ "$failures" -eq 0 ]]; then
   echo "Todos os cenários passaram."

@@ -2,9 +2,11 @@
 # Ponto de entrada único dos gates de qualidade. Ver .scratch/quality-gates/SPEC.md.
 #
 # Uso: scripts/check <nível>
-#   fast — formatação, go vet, lint, secrets scan (gitleaks) e testes unitários (sem Docker)
-#   full — tudo do fast, mais preflight do daemon Docker e a suite de conformidade
-#          (go test -tags docker ./...)
+#   fast   — formatação, go vet, lint, secrets scan (gitleaks) e testes unitários (sem Docker)
+#   full   — tudo do fast, mais preflight do daemon Docker e a suite de conformidade
+#            (go test -tags docker ./...)
+#   ci     — fast + govulncheck + go.mod limpo + go build (job rápido do pipeline)
+#   docker — só preflight Docker + suite -tags docker (job pesado do pipeline)
 #
 # Ferramentas do gate são tool dependencies do go.mod (diretiva `tool`, invocadas via
 # `go tool <nome>`), pinadas junto com as demais dependências. Comando único que
@@ -14,7 +16,10 @@
 
 set -uo pipefail
 
-VALID_LEVELS=(fast full)
+# fast / full: hooks e uso local.
+# ci: fast + checagens que só fazem sentido com rede/servidor (pipeline).
+# docker: só preflight + suite -tags docker (job pesado do pipeline, separado do fast).
+VALID_LEVELS=(fast full ci docker)
 
 usage_error() {
   echo "Erro: nível ausente ou inválido." >&2
@@ -96,7 +101,12 @@ check_secrets() {
     fi
     return 1
   fi
-  go tool gitleaks git --staged --no-banner -c .gitleaks.toml
+  # No CI o index não tem staged; escaneia o git. Localmente, só o que vai no commit.
+  if [[ "${CI:-}" == "true" ]]; then
+    go tool gitleaks git --no-banner -c .gitleaks.toml
+  else
+    go tool gitleaks git --staged --no-banner -c .gitleaks.toml
+  fi
 }
 
 check_unit() {
@@ -113,6 +123,37 @@ check_docker_preflight() {
 
 check_docker_suite() {
   go test -tags docker ./...
+}
+
+GOVULNCHECK_PKG="golang.org/x/vuln/cmd/govulncheck"
+GOVULNCHECK_MOD="golang.org/x/vuln"
+
+check_vuln() {
+  if ! go tool govulncheck -version >/dev/null 2>&1; then
+    local version
+    version="$(go list -m -f '{{.Version}}' "$GOVULNCHECK_MOD" 2>/dev/null)"
+    echo "Ferramenta ausente: govulncheck." >&2
+    echo "Instale/prepare as ferramentas do gate com: go mod download" >&2
+    if [[ -n "$version" ]]; then
+      echo "Se o problema persistir: go get -tool ${GOVULNCHECK_PKG}@${version}" >&2
+    fi
+    return 1
+  fi
+  go tool govulncheck ./...
+}
+
+check_tidy() {
+  go mod tidy
+  if ! git diff --exit-code -- go.mod go.sum; then
+    echo "go.mod/go.sum ficariam diferentes após 'go mod tidy'." >&2
+    echo "Rode: go mod tidy" >&2
+    return 1
+  fi
+  return 0
+}
+
+check_build() {
+  go build -o db-verify .
 }
 
 failed_stage=""
@@ -151,20 +192,49 @@ run_fast() {
   return 0
 }
 
-run_full() {
-  if ! run_fast; then
-    return 1
-  fi
-
-  echo "==> [full] preflight do Docker"
+run_docker() {
+  echo "==> [docker] preflight do Docker"
   if ! check_docker_preflight; then
     failed_stage="docker"
     return 1
   fi
 
-  echo "==> [full] suite de conformidade (go test -tags docker)"
+  echo "==> [docker] suite de conformidade (go test -tags docker)"
   if ! check_docker_suite; then
     failed_stage="docker"
+    return 1
+  fi
+
+  return 0
+}
+
+run_full() {
+  if ! run_fast; then
+    return 1
+  fi
+  run_docker
+}
+
+run_ci() {
+  if ! run_fast; then
+    return 1
+  fi
+
+  echo "==> [ci] varredura de vulnerabilidades (govulncheck)"
+  if ! check_vuln; then
+    failed_stage="vuln"
+    return 1
+  fi
+
+  echo "==> [ci] go.mod/go.sum limpos (go mod tidy)"
+  if ! check_tidy; then
+    failed_stage="tidy"
+    return 1
+  fi
+
+  echo "==> [ci] compilação do binário (go build)"
+  if ! check_build; then
+    failed_stage="build"
     return 1
   fi
 
@@ -177,6 +247,12 @@ case "$level" in
     ;;
   full)
     run_full
+    ;;
+  ci)
+    run_ci
+    ;;
+  docker)
+    run_docker
     ;;
 esac
 exit_code=$?

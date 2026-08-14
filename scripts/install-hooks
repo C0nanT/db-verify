@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Ativa os hooks versionados neste clone (core.hooksPath=.githooks).
+# Só altera a config local do repositório; nunca git config --global.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "Erro: scripts/install-hooks precisa ser executado dentro de um repositório git." >&2
+  exit 1
+}
+
+git -C "$root" config --local core.hooksPath .githooks
+echo "Hooks ativados neste clone: core.hooksPath=.githooks"
+echo "pre-commit -> scripts/check fast; pre-push -> scripts/check full."

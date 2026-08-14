@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Adaptador fino do gate rápido. Qualidade vive em scripts/check — não redeclara comandos.
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+exec "$root/scripts/check" fast

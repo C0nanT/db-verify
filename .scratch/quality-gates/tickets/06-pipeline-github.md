@@ -14,15 +14,15 @@ consegue disparar o pipeline manualmente, sem precisar de commit vazio.
 
 **Status:** ready-for-agent
 
-- [ ] Workflow dispara em push para `main`, em pull request e sob acionamento manual
-- [ ] Jobs invocam o ponto de entrada versionado; nenhum comando de qualidade redeclarado no YAML
-- [ ] Job rápido e job da suite Docker aparecem separados no relatório do PR
-- [ ] Job rápido inclui varredura de vulnerabilidades das dependências
-- [ ] Job rápido falha se `go mod tidy` produziria diff
-- [ ] Job rápido compila o binário
-- [ ] Job da suite roda `-tags docker` no runner, com os containers gerenciados pela própria suite
-- [ ] Versão de Go derivada do `go.mod`, não hardcoded no workflow
-- [ ] Cache de módulos e de build habilitado
-- [ ] Timeout explícito no job pesado
+- [x] Workflow dispara em push para `main`, em pull request e sob acionamento manual
+- [x] Jobs invocam o ponto de entrada versionado; nenhum comando de qualidade redeclarado no YAML
+- [x] Job rápido e job da suite Docker aparecem separados no relatório do PR
+- [x] Job rápido inclui varredura de vulnerabilidades das dependências
+- [x] Job rápido falha se `go mod tidy` produziria diff
+- [x] Job rápido compila o binário
+- [x] Job da suite roda `-tags docker` no runner, com os containers gerenciados pela própria suite
+- [x] Versão de Go derivada do `go.mod`, não hardcoded no workflow
+- [x] Cache de módulos e de build habilitado
+- [x] Timeout explícito no job pesado
 - [ ] Defeito plantado em cada categoria (formatação, lint, secrets, unit, docker) deixa o job correspondente vermelho
 - [ ] Árvore limpa deixa os dois jobs verdes
