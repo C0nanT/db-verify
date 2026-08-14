@@ -17,11 +17,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// portFlagUsage descreve --port: valor explícito é a primeira tentativa;
+// omitido, a janela da engine (Postgres 55432, demais a porta padrão).
+const portFlagUsage = "porta no host (explícito: primeira tentativa; omitido: janela da engine)"
+
 func main() {
 	var (
 		versionTag  = flag.String("version-tag", "", "versão da imagem da engine (padrão: a mesma do backup)")
 		pgVersion   = flag.String("pg", "", "alias depreciado de --version-tag")
-		port        = flag.Int("port", 0, "porta no host (padrão: primeira livre a partir de 55432)")
+		port        = flag.Int("port", 0, portFlagUsage)
 		jobs        = flag.Int("jobs", 4, "paralelismo do restore, quando a engine suportar")
 		dbName      = flag.String("db", "verify", "nome do banco de destino")
 		keep        = flag.Bool("keep", false, "não remover o container ao sair")

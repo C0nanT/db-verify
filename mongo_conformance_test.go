@@ -99,7 +99,7 @@ func mongoConformanceSourceDump(t *testing.T) string {
 	ctx := context.Background()
 
 	srcName := uniqueName("conf-src-mongo")
-	port := freePort()
+	port := freePortFrom(mongoDefaultPort)
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName,
 		"-p", fmt.Sprintf("127.0.0.1:%d:27017", port),
 		"mongo:7.0").CombinedOutput()
