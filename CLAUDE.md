@@ -35,15 +35,16 @@ go test ./...
 # Single test
 go test -run TestFuncName ./...
 
-# Full conformance + integration suite — requires Docker, spins up real containers per
-# engine (postgres, mysql, mariadb, redis, mongo images) plus in-process sqlite
-go test -tags docker ./...
+# Quality gates — unique entry point (hooks call these; do not redeclare the command list)
+./scripts/check fast    # gofmt, go vet, golangci-lint, gitleaks (staged), go test ./...
+./scripts/check full    # fast + Docker daemon preflight + go test -tags docker ./...
+./scripts/install-hooks # local core.hooksPath=.githooks (pre-commit=fast, pre-push=full)
 ```
 
 Static lint is `golangci-lint` (staticcheck, errcheck, ineffassign, unused, govet),
-configured in `.golangci.yml` and pinned as a Go tool dependency in `go.mod` — run it via
-`go tool golangci-lint run ./...` or `scripts/check fast`, which runs it after `go vet` and
-before the unit tests.
+configured in `.golangci.yml` and pinned as a Go tool dependency in `go.mod`. Agents
+should run it through `scripts/check fast` (after `go vet`, before unit tests), not as a
+separate ad-hoc lint path. Secrets scan config is `.gitleaks.toml`.
 
 ## Architecture
 

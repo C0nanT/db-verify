@@ -143,6 +143,29 @@ O container é sempre removido ao sair (inclusive em `ctrl+c`), a menos que use
 `--keep`. Ao encerrar, a string de conexão é impressa para reuso com o cliente
 nativo da engine (`psql`, `mysql`, `redis-cli`, `mongosh`…) ou DBeaver.
 
+## Qualidade
+
+Um único ponto de entrada: `scripts/check <nível>`.
+
+| nível | o que roda |
+|---|---|
+| `fast` | `gofmt` → `go vet` → `golangci-lint` → `gitleaks` (staged) → `go test ./...` |
+| `full` | tudo do `fast`, depois preflight do daemon Docker e `go test -tags docker ./...` |
+
+Num clone novo, ative os hooks versionados (só config local, sem `git config --global`):
+
+```bash
+./scripts/install-hooks
+```
+
+Isso aponta `core.hooksPath` para `.githooks/`. `pre-commit` chama `scripts/check fast`;
+`pre-push` chama `scripts/check full`. O gate de push **exige daemon Docker ligado** —
+se o daemon estiver parado, o push aborta.
+
+`--no-verify` continua existindo como válvula consciente de emergência. Não há pipeline
+no GitHub cobrindo o bypass: um commit/push com `--no-verify` não é revalidado fora da
+máquina.
+
 ## Como adicionar uma engine nova
 
 1. Criar um arquivo `<engine>.go` implementando `Engine` e `Session` (`engine.go`) —

@@ -12,9 +12,9 @@ consegue disparar o pipeline manualmente, sem precisar de commit vazio.
 
 **Blocked by:** 03 — Secrets scan com allowlist versionada; 04 — Nível `full`: preflight de Docker e suite de conformidade
 
-**Status:** ready-for-agent
+**Status:** cancelled — o maintainer optou por não ter pipeline; gates ficam só em `pre-commit` / `pre-push`.
 
-- [x] Workflow dispara em push para `main`, em pull request e sob acionamento manual
+- [ ] Workflow dispara em push para `main`, em pull request e sob acionamento manual
 - [x] Jobs invocam o ponto de entrada versionado; nenhum comando de qualidade redeclarado no YAML
 - [x] Job rápido e job da suite Docker aparecem separados no relatório do PR
 - [x] Job rápido inclui varredura de vulnerabilidades das dependências
