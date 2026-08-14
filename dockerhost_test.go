@@ -1,0 +1,346 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"strings"
+	"sync"
+	"testing"
+)
+
+func TestIsPortConflict(t *testing.T) {
+	t.Parallel()
+	yes := []string{
+		"Error: port is already allocated",
+		"bind: address already in use",
+		"Bind for 0.0.0.0:5432 failed: port is already allocated",
+		"driver failed programming external connectivity on endpoint: Bind for 127.0.0.1:3306 failed",
+	}
+	for _, msg := range yes {
+		if !isPortConflict(msg) {
+			t.Errorf("queria conflito: %q", msg)
+		}
+	}
+	no := []string{
+		"Unable to find image 'postgres:99' locally",
+		"Cannot connect to the Docker daemon",
+		"permission denied",
+		"",
+	}
+	for _, msg := range no {
+		if isPortConflict(msg) {
+			t.Errorf("não queria conflito: %q", msg)
+		}
+	}
+}
+
+type recRun struct {
+	mu    sync.Mutex
+	calls [][]string
+	fn    dockerRun
+}
+
+func (r *recRun) Run(ctx context.Context, args ...string) ([]byte, error) {
+	r.mu.Lock()
+	cp := append([]string(nil), args...)
+	r.calls = append(r.calls, cp)
+	r.mu.Unlock()
+	if r.fn != nil {
+		return r.fn(ctx, args...)
+	}
+	return nil, nil
+}
+
+func (r *recRun) has(prefix ...string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, c := range r.calls {
+		if len(c) < len(prefix) {
+			continue
+		}
+		ok := true
+		for i := range prefix {
+			if c[i] != prefix[i] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *recRun) countPrefix(first string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for _, c := range r.calls {
+		if len(c) > 0 && c[0] == first {
+			n++
+		}
+	}
+	return n
+}
+
+func conflictErr() error {
+	return errors.New("Error response from daemon: Bind for 127.0.0.1:1 failed: port is already allocated")
+}
+
+func scriptAttempt(errs ...error) (func(int) error, *[]int) {
+	var got []int
+	i := 0
+	return func(port int) error {
+		got = append(got, port)
+		if i >= len(errs) {
+			return fmt.Errorf("attempt extra na porta %d", port)
+		}
+		e := errs[i]
+		i++
+		return e
+	}, &got
+}
+
+func TestStartWithPortRetry_SucessoNaPrimeira(t *testing.T) {
+	t.Parallel()
+	rec := &recRun{}
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: io.Discard, Stdin: strings.NewReader("")}
+	attempt, ports := scriptAttempt(nil)
+	got, err := h.StartWithPortRetry(context.Background(), "db-verify-1", 55432, attempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 55432 {
+		t.Fatalf("porta %d, queria 55432", got)
+	}
+	if len(*ports) != 1 {
+		t.Fatalf("attempts %v", *ports)
+	}
+	if rec.countPrefix("rm") != 0 {
+		t.Fatalf("não deveria rm no sucesso: %v", rec.calls)
+	}
+}
+
+func TestStartWithPortRetry_ConflitoDepoisSucesso(t *testing.T) {
+	t.Parallel()
+	rec := &recRun{}
+	var stderr bytes.Buffer
+	h := &DockerHost{Run: rec.Run, Stderr: &stderr, Stdout: io.Discard, Stdin: strings.NewReader("")}
+	attempt, ports := scriptAttempt(conflictErr(), nil)
+	got, err := h.StartWithPortRetry(context.Background(), "db-verify-1", 3306, attempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 3307 {
+		t.Fatalf("porta %d, queria 3307", got)
+	}
+	if !rec.has("rm", "-f", "db-verify-1") {
+		t.Fatalf("esperava rm -f entre conflitos: %v", rec.calls)
+	}
+	if !strings.Contains(stderr.String(), "porta 3306 já em uso, tentando 3307") {
+		t.Fatalf("aviso stderr: %q", stderr.String())
+	}
+	if len(*ports) != 2 {
+		t.Fatalf("attempts %v", *ports)
+	}
+}
+
+func TestStartWithPortRetry_ErroNaoConflitoAborta(t *testing.T) {
+	t.Parallel()
+	rec := &recRun{}
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: io.Discard, Stdin: strings.NewReader("")}
+	boom := errors.New("Unable to find image 'nope:99' locally")
+	attempt, ports := scriptAttempt(conflictErr(), boom, nil)
+	_, err := h.StartWithPortRetry(context.Background(), "c", 1, attempt)
+	if err == nil || !strings.Contains(err.Error(), "Unable to find image") {
+		t.Fatalf("erro: %v", err)
+	}
+	if len(*ports) != 2 {
+		t.Fatalf("não deveria retentar após não-conflito: %v", *ports)
+	}
+}
+
+func TestStartWithPortRetry_EsgotaSemContainerVaiAoErro(t *testing.T) {
+	t.Parallel()
+	rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "ps" {
+			return nil, nil
+		}
+		return nil, nil
+	}}
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: io.Discard, Stdin: strings.NewReader("1\n")}
+	attempt, ports := scriptAttempt(conflictErr(), conflictErr(), conflictErr(), conflictErr(), conflictErr())
+	_, err := h.StartWithPortRetry(context.Background(), "c", 10, attempt)
+	if err == nil || !strings.Contains(err.Error(), "nenhuma porta livre entre 10 e 14") {
+		t.Fatalf("erro: %v", err)
+	}
+	if len(*ports) != 5 {
+		t.Fatalf("attempts %v", *ports)
+	}
+	if rec.countPrefix("ps") == 0 {
+		t.Fatal("deveria consultar docker ps após esgotar")
+	}
+}
+
+func TestStartWithPortRetry_EnterNaoLiberta(t *testing.T) {
+	t.Parallel()
+	psLine := "abc\tzombie\tpostgres:16\t0.0.0.0:10->5432/tcp\n"
+	rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "ps" {
+			return []byte(psLine), nil
+		}
+		return nil, nil
+	}}
+	var stdout bytes.Buffer
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: &stdout, Stdin: strings.NewReader("\n")}
+	attempt, _ := scriptAttempt(conflictErr(), conflictErr(), conflictErr(), conflictErr(), conflictErr())
+	_, err := h.StartWithPortRetry(context.Background(), "c", 10, attempt)
+	if err == nil || !strings.Contains(err.Error(), "nenhuma porta livre") {
+		t.Fatalf("erro: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "número do container para derrubar") {
+		t.Fatalf("prompt: %q", stdout.String())
+	}
+	if rec.has("rm", "-f", "zombie") {
+		t.Fatal("Enter não deveria derrubar")
+	}
+}
+
+func TestStartWithPortRetry_IndiceValidoLibertaERetenta(t *testing.T) {
+	t.Parallel()
+	psLine := "abc\tzombie\tpostgres:16\t0.0.0.0:10->5432/tcp\n"
+	rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "ps" {
+			return []byte(psLine), nil
+		}
+		return nil, nil
+	}}
+	var stdout bytes.Buffer
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: &stdout, Stdin: strings.NewReader("1\n")}
+	n := 0
+	attempt := func(port int) error {
+		n++
+		if n <= 5 {
+			return conflictErr()
+		}
+		return nil
+	}
+	got, err := h.StartWithPortRetry(context.Background(), "c", 10, attempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 10 {
+		t.Fatalf("depois de libertar, faixa recomeça em 10, veio %d", got)
+	}
+	if !rec.has("rm", "-f", "zombie") {
+		t.Fatalf("deveria derrubar escolhido: %v", rec.calls)
+	}
+	if !strings.Contains(stdout.String(), "derrubando zombie") {
+		t.Fatalf("stdout: %q", stdout.String())
+	}
+	if n != 6 {
+		t.Fatalf("5 conflitos + 1 sucesso, veio %d", n)
+	}
+}
+
+func TestStartWithPortRetry_OpcaoInvalida(t *testing.T) {
+	t.Parallel()
+	psLine := "abc\tzombie\tpostgres:16\t0.0.0.0:10->5432/tcp\n"
+	rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "ps" {
+			return []byte(psLine), nil
+		}
+		return nil, nil
+	}}
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: io.Discard, Stdin: strings.NewReader("99\n")}
+	attempt, _ := scriptAttempt(conflictErr(), conflictErr(), conflictErr(), conflictErr(), conflictErr())
+	_, err := h.StartWithPortRetry(context.Background(), "c", 10, attempt)
+	if err == nil || !strings.Contains(err.Error(), `opção inválida: "99"`) {
+		t.Fatalf("erro: %v", err)
+	}
+}
+
+func TestStartWithPortRetry_SegundoCicloNaoLoopa(t *testing.T) {
+	t.Parallel()
+	psLine := "abc\tzombie\tpostgres:16\t0.0.0.0:10->5432/tcp\n"
+	psHits := 0
+	rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "ps" {
+			psHits++
+			return []byte(psLine), nil
+		}
+		return nil, nil
+	}}
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: io.Discard, Stdin: strings.NewReader("1\n1\n1\n")}
+	attempt := func(port int) error { return conflictErr() }
+	_, err := h.StartWithPortRetry(context.Background(), "c", 10, attempt)
+	if err == nil || !strings.Contains(err.Error(), "nenhuma porta livre entre 10 e 14") {
+		t.Fatalf("erro: %v", err)
+	}
+	if psHits != 5 {
+		// um ciclo de prompt: ps por cada porta tentada (5), sem segundo prompt
+		t.Fatalf("docker ps hits %d, queria 5 (um ciclo de listagem)", psHits)
+	}
+}
+
+func TestStartWithPortRetry_CancelaContexto(t *testing.T) {
+	t.Parallel()
+	h := &DockerHost{Run: func(context.Context, ...string) ([]byte, error) { return nil, nil }, Stderr: io.Discard, Stdout: io.Discard}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := h.StartWithPortRetry(ctx, "c", 1, func(int) error { return conflictErr() })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("erro: %v", err)
+	}
+}
+
+func TestDockerHost_Available(t *testing.T) {
+	t.Parallel()
+	h := &DockerHost{
+		LookPath: func(string) (string, error) { return "", errors.New("not found") },
+		Run:      func(context.Context, ...string) ([]byte, error) { t.Fatal("não chamar Run"); return nil, nil },
+	}
+	if err := h.Available(context.Background()); err == nil || !strings.Contains(err.Error(), "não encontrado") {
+		t.Fatalf("PATH: %v", err)
+	}
+	h = &DockerHost{
+		LookPath: func(string) (string, error) { return "/usr/bin/docker", nil },
+		Run:      func(context.Context, ...string) ([]byte, error) { return nil, errors.New("cannot connect") },
+	}
+	if err := h.Available(context.Background()); err == nil || !strings.Contains(err.Error(), "não está acessível") {
+		t.Fatalf("daemon: %v", err)
+	}
+	h = &DockerHost{
+		LookPath: func(string) (string, error) { return "/usr/bin/docker", nil },
+		Run:      func(context.Context, ...string) ([]byte, error) { return []byte("ok"), nil },
+	}
+	if err := h.Available(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type fakeListener struct{}
+
+func (fakeListener) Accept() (net.Conn, error) { return nil, io.EOF }
+func (fakeListener) Close() error              { return nil }
+func (fakeListener) Addr() net.Addr            { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0} }
+
+func TestDockerHost_FreePortFrom_ListenInjetado(t *testing.T) {
+	t.Parallel()
+	h := &DockerHost{
+		Listen: func(network, address string) (net.Listener, error) {
+			if address == "127.0.0.1:3308" {
+				return fakeListener{}, nil
+			}
+			return nil, errors.New("bind")
+		},
+	}
+	if p := h.FreePortFrom(3306); p != 3308 {
+		t.Fatalf("porta %d", p)
+	}
+}

@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -154,28 +153,6 @@ type pgContainer struct {
 func (c *pgContainer) DSN() string {
 	return fmt.Sprintf("postgres://%s:%s@127.0.0.1:%d/%s?sslmode=disable",
 		c.User, c.Pass, c.Port, c.DB)
-}
-
-func dockerAvailable() error {
-	if _, err := exec.LookPath("docker"); err != nil {
-		return fmt.Errorf("docker não encontrado no PATH")
-	}
-	if err := exec.Command("docker", "info").Run(); err != nil {
-		return fmt.Errorf("docker daemon não está acessível")
-	}
-	return nil
-}
-
-// freePort procura uma porta livre a partir de 55432.
-func freePort() int {
-	for p := 55432; p < 55532; p++ {
-		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
-		if err == nil {
-			l.Close()
-			return p
-		}
-	}
-	return 55432
 }
 
 // Start sobe o container com fsync desligado (restore mais rápido, dado descartável).

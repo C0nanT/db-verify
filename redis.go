@@ -221,8 +221,8 @@ func (c *redisContainer) StartContainer(ctx context.Context) error {
 
 // CopyDump posiciona o backup como /data/dump.rdb (dir e nome default do
 // Redis) num container que ainda não subiu. Isso descarta a técnica das
-// demais engines (`docker exec ... sh -c "cat > arquivo"`, docker.go/
-// postgres.go/mysql.go): não há processo para executar num container
+// demais engines (`docker exec ... sh -c "cat > arquivo"`, postgres.go/
+// mysql.go): não há processo para executar num container
 // parado. Em vez disso, `docker cp -` aceita um stream tar via stdin mesmo
 // com o container parado. Para o caso comum (sem compressão) isso é feito
 // por streaming puro, sem tocar disco no host; um RDB comprimido precisa
