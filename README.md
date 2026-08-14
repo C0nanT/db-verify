@@ -69,7 +69,7 @@ que o servidor conheça.
 |---|---|---|
 | `--version-tag` | versão lida do backup (fallback por engine, ver tabela acima) | versão da imagem da engine detectada |
 | `--pg` | — | **depreciado**, alias de `--version-tag` |
-| `--port` | primeira livre a partir de 55432 (ou da porta padrão da engine) | porta publicada em `127.0.0.1` |
+| `--port` | omitido: janela da engine; explícito: primeira tentativa | porta publicada em `127.0.0.1` |
 | `--jobs` | 4 | paralelismo do restore, quando a engine suportar |
 | `--db` | `verify` | nome do banco de destino |
 | `--keep` | off | não remove o container ao sair |

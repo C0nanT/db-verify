@@ -9,11 +9,10 @@ package main
 import (
 	"context"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
-
-	"os/exec"
 )
 
 func init() {
@@ -64,16 +63,7 @@ func pgConformanceSourceDump(t *testing.T) string {
 	}
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", srcName).Run() })
 
-	deadline := time.Now().Add(60 * time.Second)
-	for {
-		if exec.Command("docker", "exec", srcName, "pg_isready", "-U", "postgres", "-d", "srcdb").Run() == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timeout esperando o Postgres de origem ficar pronto")
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	waitDockerPostgres(t, srcName, "postgres", "srcdb", 60*time.Second)
 
 	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", srcName,
 		"psql", "-U", "postgres", "-d", "srcdb", "-v", "ON_ERROR_STOP=1")

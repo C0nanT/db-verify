@@ -111,6 +111,32 @@ func uniqueName(part string) string {
 	return fmt.Sprintf("db-verify-test-%s-%d-%d", part, os.Getpid(), time.Now().UnixNano())
 }
 
+// waitDockerPostgres espera o banco de origem existir de verdade. pg_isready
+// sozinho aceita o servidor temporário da imagem oficial (antes de srcdb e
+// do restart) — o psql em seguida falha com "database does not exist" ou
+// "system is shutting down". Duas consultas SELECT 1 seguidas, mesmo padrão
+// de pgContainer.WaitReady.
+func waitDockerPostgres(t *testing.T, name, user, db string, timeout time.Duration) {
+	t.Helper()
+	check := func() bool {
+		return exec.Command("docker", "exec", name,
+			"psql", "-U", user, "-d", db, "-c", "SELECT 1").Run() == nil
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if check() {
+			time.Sleep(300 * time.Millisecond)
+			if check() {
+				return
+			}
+			continue
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	logs, _ := exec.Command("docker", "logs", "--tail", "20", name).CombinedOutput()
+	t.Fatalf("timeout esperando o Postgres de origem ficar pronto:\n%s", logs)
+}
+
 // buildSourceDump sobe um Postgres "de origem" descartável, aplica o schema
 // de teste e devolve o caminho de um dump em formato custom gerado por
 // pg_dump dentro do próprio container (mesma versão de servidor e cliente).
@@ -131,16 +157,7 @@ func buildSourceDump(t *testing.T) string {
 	}
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", srcName).Run() })
 
-	deadline := time.Now().Add(60 * time.Second)
-	for {
-		if exec.Command("docker", "exec", srcName, "pg_isready", "-U", "postgres", "-d", "srcdb").Run() == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timeout esperando o Postgres de origem ficar pronto")
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	waitDockerPostgres(t, srcName, "postgres", "srcdb", 60*time.Second)
 
 	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", srcName,
 		"psql", "-U", "postgres", "-d", "srcdb", "-v", "ON_ERROR_STOP=1")
