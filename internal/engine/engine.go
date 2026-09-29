@@ -195,7 +195,7 @@ type Session interface {
 
 var registry []Engine
 
-// Register cadastra uma engine. Chamado do init() do arquivo de cada engine.
+// Register cadastra uma engine. Chamado pela lista explícita em engines.go (pacote main).
 func Register(e Engine) {
 	registry = append(registry, e)
 }

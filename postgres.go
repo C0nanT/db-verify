@@ -19,8 +19,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func init() { Register(pgEngine{}) }
-
 // pgEngine implementa Engine para PostgreSQL.
 type pgEngine struct{}
 

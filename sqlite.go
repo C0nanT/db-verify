@@ -36,8 +36,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func init() { Register(sqliteEngine{}) }
-
 // sqliteEngine implementa Engine para SQLite.
 type sqliteEngine struct{}
 

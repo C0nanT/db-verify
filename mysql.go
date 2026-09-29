@@ -32,8 +32,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func init() { Register(mysqlEngine{}) }
-
 // mysqlEngine implementa Engine para MySQL.
 type mysqlEngine struct{}
 

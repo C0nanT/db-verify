@@ -27,8 +27,6 @@ import (
 	"time"
 )
 
-func init() { Register(mariadbEngine{}) }
-
 // mariadbEngine implementa Engine para MariaDB.
 type mariadbEngine struct{}
 

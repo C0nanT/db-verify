@@ -36,8 +36,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func init() { Register(redisEngine{}) }
-
 // redisEngine implementa Engine para Redis.
 type redisEngine struct{}
 

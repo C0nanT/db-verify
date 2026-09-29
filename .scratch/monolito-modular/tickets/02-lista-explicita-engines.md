@@ -10,10 +10,10 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seção "Registro das engines").
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Nenhum arquivo de engine chama `Register` em `init()`.
-- [ ] Existe uma única lista de engines no pacote `main`, com comentário em pt-BR explicando que a ordem decide o desempate de detecção.
-- [ ] `--list-engines` mostra as mesmas engines, na mesma ordem de antes.
-- [ ] Os testes de detecção sobre `testdata/headers/` e a suíte de conformidade continuam vendo todas as engines.
-- [ ] `./scripts/check full` passa.
+- [x] Nenhum arquivo de engine chama `Register` em `init()`.
+- [x] Existe uma única lista de engines no pacote `main`, com comentário em pt-BR explicando que a ordem decide o desempate de detecção.
+- [x] `--list-engines` mostra as mesmas engines, na mesma ordem de antes.
+- [x] Os testes de detecção sobre `testdata/headers/` e a suíte de conformidade continuam vendo todas as engines.
+- [x] `./scripts/check full` passa.
