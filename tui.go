@@ -64,6 +64,8 @@ type model struct {
 	resFor  string
 	resErr  error
 	hscroll int
+	wide    bool // colunas sem limite de largura: rola até ler a célula inteira
+	noList  bool // painel de tabelas oculto: resultado usa a largura toda
 
 	width, height int
 	quitting      bool
@@ -75,8 +77,11 @@ const (
 	nameGutter  = 18 // espaço reservado para LINHAS + TAMANHO
 )
 
-// listW: largura do painel de coleções, adaptada ao terminal.
+// listW: largura do painel de coleções, adaptada ao terminal (0 se oculto).
 func (m *model) listW() int {
+	if m.noList {
+		return 0
+	}
 	w := m.width / 3
 	if w > 56 {
 		w = 56
@@ -284,12 +289,23 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resFor = "" // força reexecutar
 			return m, m.loadCurrent()
 		case "left", "h":
-			m.hscroll -= 8
-			if m.hscroll < 0 {
-				m.hscroll = 0
-			}
+			m.scrollBy(-8)
 		case "right", "l":
-			m.hscroll += 8
+			m.scrollBy(8)
+		case "shift+left", "H":
+			m.scrollBy(-m.tableViewW())
+		case "shift+right", "L":
+			m.scrollBy(m.tableViewW())
+		case "0":
+			m.hscroll = 0
+		case "$":
+			m.scrollBy(1 << 30)
+		case "e":
+			m.wide = !m.wide
+			m.scrollBy(0)
+		case "tab":
+			m.noList = !m.noList
+			m.scrollBy(0)
 		case "/":
 			m.filtOn, m.filter = true, ""
 			m.applyFilter()
@@ -300,11 +316,41 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ------------------------------------------------------------------- view ----
 
+// resultW: largura externa do painel de resultado.
+func (m *model) resultW() int {
+	w := m.width - m.listW() - 2
+	if w < 20 {
+		w = 20
+	}
+	return w
+}
+
+// tableViewW: largura visível da tabela dentro do painel de resultado.
+func (m *model) tableViewW() int { return m.resultW() - 4 }
+
+// scrollBy desloca o scroll horizontal e o mantém entre o início e o fim da tabela.
+func (m *model) scrollBy(d int) {
+	m.hscroll += d
+	limit := 0
+	if m.res != nil {
+		limit = tableWidth(colWidths(m.res, m.wide)) - m.tableViewW()
+	}
+	if m.hscroll > limit {
+		m.hscroll = limit
+	}
+	if m.hscroll < 0 {
+		m.hscroll = 0
+	}
+}
+
 func (m *model) View() string {
 	if m.quitting {
 		return ""
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, m.viewList(), m.viewResult())
+	body := m.viewResult()
+	if !m.noList {
+		body = lipgloss.JoinHorizontal(lipgloss.Top, m.viewList(), body)
+	}
 	return m.viewHeader() + "\n" + body + "\n" + m.viewFooter()
 }
 
@@ -371,10 +417,7 @@ func (m *model) viewList() string {
 }
 
 func (m *model) viewResult() string {
-	w := m.width - m.listW() - 2
-	if w < 20 {
-		w = 20
-	}
+	w := m.resultW()
 	h := m.bodyHeight() - 2
 
 	if len(m.collections) == 0 {
@@ -400,44 +443,80 @@ func (m *model) viewResult() string {
 	case m.res == nil || len(m.res.Rows) == 0:
 		bodyLines = []string{stWarn.Render("tabela vazia — nenhum registro")}
 	default:
-		bodyLines = renderTable(m.res, w-4, h-4, m.hscroll)
+		bodyLines = renderTable(m.res, m.tableViewW(), h-4, m.hscroll, m.wide)
 	}
 	lines := append([]string{head, hint, queryLine, ""}, bodyLines...)
 	return stBox.Width(w - 2).Height(h).Render(strings.Join(lines, "\n"))
 }
 
 func (m *model) viewFooter() string {
-	keys := []string{"↑/↓ navegar", "clique/enter consultar", "←/→ rolar colunas", "/ filtrar", "r recarregar", "q sair"}
+	expand := "e expandir colunas"
+	if m.wide {
+		expand = "e compactar colunas"
+	}
+	keys := []string{"↑/↓ navegar", "clique/enter consultar", "←/→ rolar (shift: tela)", expand, "tab ocultar lista", "/ filtrar", "r recarregar", "q sair"}
 	return stDim.Render("  " + strings.Join(keys, "  ·  "))
 }
 
-// renderTable desenha o resultset em colunas alinhadas, com scroll horizontal.
-func renderTable(rs *ResultSet, width, maxRows, hscroll int) []string {
-	const maxCol = 28
+// maxCol: largura máxima de uma coluna no modo compacto (fora do modo expandido).
+const maxCol = 28
+
+// colSep separa as colunas renderizadas.
+const colSep = " │ "
+
+// cellText achata a célula numa linha só: quebras e tabs quebrariam o layout da tabela.
+var cellText = strings.NewReplacer("\r\n", "⏎", "\n", "⏎", "\r", "⏎", "\t", " ").Replace
+
+// colWidths calcula a largura de cada coluna; wide=false limita cada uma a maxCol.
+func colWidths(rs *ResultSet, wide bool) []int {
 	widths := make([]int, len(rs.Columns))
 	for i, c := range rs.Columns {
 		widths[i] = len([]rune(c))
 	}
 	for _, row := range rs.Rows {
 		for i, v := range row {
-			if n := len([]rune(v)); n > widths[i] {
+			if n := len([]rune(cellText(v))); i < len(widths) && n > widths[i] {
 				widths[i] = n
 			}
 		}
 	}
-	for i := range widths {
-		if widths[i] > maxCol {
-			widths[i] = maxCol
+	if !wide {
+		for i := range widths {
+			if widths[i] > maxCol {
+				widths[i] = maxCol
+			}
 		}
 	}
+	return widths
+}
+
+// tableWidth: largura total de uma linha da tabela, com separadores.
+func tableWidth(widths []int) int {
+	total := 0
+	for i, w := range widths {
+		if i > 0 {
+			total += len([]rune(colSep))
+		}
+		total += w
+	}
+	return total
+}
+
+// renderTable desenha o resultset em colunas alinhadas, com scroll horizontal.
+// wide=true não trunca células: o conteúdo inteiro fica acessível via hscroll.
+func renderTable(rs *ResultSet, width, maxRows, hscroll int, wide bool) []string {
+	widths := colWidths(rs, wide)
 
 	build := func(cells []string) string {
 		var b strings.Builder
 		for i, c := range cells {
-			if i > 0 {
-				b.WriteString(" │ ")
+			if i >= len(widths) {
+				break
 			}
-			b.WriteString(pad(truncate(c, widths[i]), widths[i]))
+			if i > 0 {
+				b.WriteString(colSep)
+			}
+			b.WriteString(pad(truncate(cellText(c), widths[i]), widths[i]))
 		}
 		return b.String()
 	}
@@ -456,7 +535,11 @@ func renderTable(rs *ResultSet, width, maxRows, hscroll int) []string {
 		}
 		out = append(out, slice(build(row), hscroll, width))
 	}
-	out = append(out, "", stDim.Render(fmt.Sprintf("%d linha(s) em %s", len(rs.Rows), rs.Elapsed.Round(1e6))))
+	status := fmt.Sprintf("%d linha(s) em %s", len(rs.Rows), rs.Elapsed.Round(1e6))
+	if total := tableWidth(widths); total > width {
+		status += fmt.Sprintf("  ·  colunas %d–%d de %d", hscroll+1, min(hscroll+width, total), total)
+	}
+	out = append(out, "", stDim.Render(status))
 	return out
 }
 

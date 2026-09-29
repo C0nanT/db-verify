@@ -85,6 +85,10 @@ que o servidor conheça.
 | clique / roda do mouse | seleciona a coleção no painel esquerdo |
 | `enter` / `r` | reexecuta a consulta |
 | `←`/`→` ou `h`/`l` | rola as colunas do resultado |
+| `shift+←`/`shift+→` ou `H`/`L` | rola o resultado uma tela inteira |
+| `0` / `$` | vai ao início / fim da linha do resultado |
+| `e` | expande as colunas (sem truncar em 28 caracteres) para ler valores longos inteiros |
+| `tab` | oculta/mostra o painel de coleções (resultado usa a largura toda) |
 | `/` | filtra coleções (esc limpa) |
 | `q` / `esc` / `ctrl+c` | sai e derruba o container |
 
