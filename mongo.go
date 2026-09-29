@@ -151,7 +151,9 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		Port:  port,
 	}
 
-	opts.report("subindo container %s (imagem %s)…", cont.Name, cont.Image)
+	if err := opts.step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+		return nil, err
+	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
@@ -160,37 +162,66 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		return nil, err
 	}
 	if finalPort != port {
-		opts.report("porta %d livre, usando essa…", finalPort)
+		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+			cont.Remove()
+			return nil, err
+		}
 	}
 	// O Mongo demora mais para ficar pronto que as demais engines (ticket
 	// 09: "o timeout de 'ficar pronto' é específico do Mongo") — imagem
 	// maior e inicialização em duas etapas (bootstrap + servidor real).
-	opts.report("aguardando o MongoDB ficar pronto…")
+	if err := opts.step(ctx, "aguardando o MongoDB ficar pronto…"); err != nil {
+		cont.Remove()
+		return nil, err
+	}
 	if err := cont.WaitReady(ctx, 180*time.Second); err != nil {
 		cont.Remove()
 		return nil, err
 	}
-	opts.report("restaurando via mongorestore --archive (pode demorar)…")
+	if err := opts.step(ctx, "restaurando via mongorestore --archive (pode demorar)…"); err != nil {
+		cont.Remove()
+		return nil, err
+	}
 	res, err := cont.Restore(ctx, b, opts.Jobs)
+	if err == nil {
+		// Ctrl+C no terminal também derruba o `docker exec` filho, que
+		// devolve ExitError (vira res, não erro): o ctx é quem diz.
+		err = ctx.Err()
+	}
 	if err != nil {
+		res.discardLog()
 		cont.Remove()
 		return nil, err
 	}
 
 	client, err := mongoConnect(ctx, cont.URI())
 	if err != nil {
+		res.discardLog()
 		cont.Remove()
 		return nil, fmt.Errorf("conexão falhou: %w", err)
 	}
 
 	dbNames, err := mongoRestoredDBs(ctx, client)
+	if err == nil {
+		err = ctx.Err()
+	}
 	if err != nil {
-		_ = client.Disconnect(ctx)
+		mongoDisconnect(ctx, client)
+		res.discardLog()
 		cont.Remove()
 		return nil, err
 	}
 
 	return &mongoSession{client: client, cont: cont, restore: res, dbNames: dbNames}, nil
+}
+
+// mongoDisconnect fecha o cliente num caminho de falha do Provision, com
+// contexto próprio de prazo curto: o ctx do chamador pode já estar
+// cancelado, e o Disconnect não deve depender dele.
+func mongoDisconnect(ctx context.Context, client *mongo.Client) {
+	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_ = client.Disconnect(dctx)
 }
 
 // mongoRestoredDBs lista as databases que o restore de fato produziu,

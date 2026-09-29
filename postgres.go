@@ -101,7 +101,9 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 		Port:  port, DB: opts.DBName, User: "postgres", Pass: "postgres",
 	}
 
-	opts.report("subindo container %s (imagem %s)…", cont.Name, cont.Image)
+	if err := opts.step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+		return nil, err
+	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
@@ -110,29 +112,54 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 		return nil, err
 	}
 	if finalPort != port {
-		opts.report("porta %d livre, usando essa…", finalPort)
+		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+			cont.Remove()
+			return nil, err
+		}
 	}
-	opts.report("aguardando o Postgres ficar pronto…")
+	if err := opts.step(ctx, "aguardando o Postgres ficar pronto…"); err != nil {
+		cont.Remove()
+		return nil, err
+	}
 	if err := cont.WaitReady(ctx, 90*time.Second); err != nil {
 		cont.Remove()
 		return nil, err
 	}
-	opts.report("copiando dump para o container…")
+	if err := opts.step(ctx, "copiando dump para o container…"); err != nil {
+		cont.Remove()
+		return nil, err
+	}
 	if err := cont.CopyDump(ctx, b); err != nil {
 		cont.Remove()
 		return nil, err
 	}
-	opts.report("restaurando (pode demorar)…")
+	if err := opts.step(ctx, "restaurando (pode demorar)…"); err != nil {
+		cont.Remove()
+		return nil, err
+	}
 	res, err := cont.Restore(ctx, b, opts.Jobs)
+	if err == nil {
+		// Ctrl+C no terminal também derruba o `docker exec` filho, que
+		// devolve ExitError (vira res, não erro): o ctx é quem diz.
+		err = ctx.Err()
+	}
 	if err != nil {
+		res.discardLog()
 		cont.Remove()
 		return nil, err
 	}
 
 	pool, err := pgConnect(ctx, cont.DSN())
 	if err != nil {
+		res.discardLog()
 		cont.Remove()
 		return nil, fmt.Errorf("conexão falhou: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		pool.Close()
+		res.discardLog()
+		cont.Remove()
+		return nil, err
 	}
 
 	return &pgSession{pool: pool, cont: cont, restore: res}, nil

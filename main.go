@@ -6,11 +6,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -80,9 +82,27 @@ func main() {
 		os.Exit(2)
 	}
 	if err := run(dumpPath, *versionTag, *engineName, *port, *jobs, *dbName, *keep, !*noCounts); err != nil {
+		if errors.Is(err, errInterrupted) {
+			fmt.Fprintf(os.Stderr, "\n%s interrompido\n", stWarn.Render("!"))
+			os.Exit(130)
+		}
 		fmt.Fprintf(os.Stderr, "\n%s %v\n", stErr.Render("✗"), err)
 		os.Exit(1)
 	}
+}
+
+// errInterrupted marca a saída por SIGINT/SIGTERM: main imprime
+// "interrompido" e sai com 130.
+var errInterrupted = errors.New("interrompido")
+
+// interruptedErr traduz um erro para errInterrupted quando o ctx foi
+// cancelado (o erro real é consequência do cancelamento); com o ctx vivo,
+// devolve err intacto.
+func interruptedErr(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return errInterrupted
+	}
+	return err
 }
 
 func step(format string, a ...any) {
@@ -92,6 +112,38 @@ func step(format string, a ...any) {
 func run(path, versionTag, engineName string, port, jobs int, dbName string, keep, exactCounts bool) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// SIGINT/SIGTERM cancelam o ctx desde já, antes do Provision: durante o
+	// provisionamento, o próprio Provision limpa o container e devolve erro.
+	// Depois dele, a sessão viva é fechada aqui (salvo --keep) e o processo
+	// sai com 130. mu serializa "cancelar + ler live" contra "gravar live +
+	// checar ctx", para um sinal no fim do Provision não fechar a sessão
+	// duas vezes nem nenhuma.
+	var (
+		mu   sync.Mutex
+		live Session
+	)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigs)
+	go func() {
+		select {
+		case <-sigs:
+		case <-ctx.Done():
+			return // run terminou normalmente
+		}
+		mu.Lock()
+		cancel()
+		sess := live
+		mu.Unlock()
+		if sess == nil {
+			return // Provision em andamento: ele limpa e run devolve errInterrupted
+		}
+		if !keep {
+			sess.Close()
+		}
+		os.Exit(130)
+	}()
 
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -126,19 +178,9 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 	}
 	sess, err := eng.Provision(ctx, backup, opts)
 	if err != nil {
-		return err
+		return interruptedErr(ctx, err)
 	}
 
-	// derruba a sessão em Ctrl+C também
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-stop
-		if !keep {
-			sess.Close()
-		}
-		os.Exit(130)
-	}()
 	defer func() {
 		if keep {
 			hint := sess.ConnectHint()
@@ -160,6 +202,16 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 			sess.Close()
 		}
 	}()
+
+	mu.Lock()
+	live = sess
+	interrupted := ctx.Err() != nil
+	mu.Unlock()
+	if interrupted {
+		// sinal chegou entre o fim do Provision e aqui: o defer acima
+		// fecha (ou mantém, com --keep) a sessão.
+		return errInterrupted
+	}
 
 	if res := sess.Restore(); res != nil {
 		if len(res.Errors) == 0 {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"time"
 )
 
@@ -61,6 +62,15 @@ func (o ProvisionOpts) report(format string, a ...any) {
 	if o.Progress != nil {
 		o.Progress(format, a...)
 	}
+}
+
+// step reporta o início de um passo do Provision e devolve ctx.Err(): é o
+// ponto de checagem entre passos, para que um cancelamento (Ctrl+C) vire
+// erro em vez de o Provision seguir para o próximo passo. Quem recebe erro
+// daqui limpa o que já criou antes de devolvê-lo.
+func (o ProvisionOpts) step(ctx context.Context, format string, a ...any) error {
+	o.report(format, a...)
+	return ctx.Err()
 }
 
 // Collection é uma linha do painel esquerdo: uma tabela, uma coleção do
@@ -134,6 +144,15 @@ type RestoreResult struct {
 	Duration time.Duration
 	LogPath  string
 	ExitCode int
+}
+
+// discardLog apaga o log do restore em arquivo, se houver. Usado quando o
+// Provision falha (ou é cancelado) depois do restore: o log é um recurso
+// externo que ninguém mais vai ver. Aceita receptor nil.
+func (r *RestoreResult) discardLog() {
+	if r != nil && r.LogPath != "" {
+		_ = os.Remove(r.LogPath)
+	}
 }
 
 // Engine sabe reconhecer e provisionar um tipo de backup.

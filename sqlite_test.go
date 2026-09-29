@@ -537,3 +537,53 @@ func sqliteCollectionByName(collections []Collection, name string) (Collection, 
 	}
 	return Collection{}, false
 }
+
+// TestSQLiteProvision_CanceladoDevolveErroESemTemporario cobre o contrato de
+// Provision para a engine sem container: cancelado em qualquer relatório de
+// progresso, devolve erro (nunca Session) e não deixa a cópia temporária.
+func TestSQLiteProvision_CanceladoDevolveErroESemTemporario(t *testing.T) {
+	path := buildSQLiteFixture(t)
+	backup, err := InspectDumpAs(path, "sqlite")
+	if err != nil {
+		t.Fatalf("InspectDumpAs: %v", err)
+	}
+
+	n := 0
+	sess, err := sqliteEngine{}.Provision(context.Background(), backup, ProvisionOpts{
+		Progress: func(string, ...any) { n++ },
+	})
+	if err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	sess.Close()
+	if n == 0 {
+		t.Fatal("Provision não reportou nenhum progresso")
+	}
+
+	for k := 1; k <= n; k++ {
+		tmp := t.TempDir()
+		t.Setenv("TMPDIR", tmp)
+		ctx, cancel := context.WithCancel(context.Background())
+		calls := 0
+		sess, err := sqliteEngine{}.Provision(ctx, backup, ProvisionOpts{
+			Progress: func(string, ...any) {
+				calls++
+				if calls == k {
+					cancel()
+				}
+			},
+		})
+		cancel()
+		if sess != nil {
+			sess.Close()
+			t.Fatalf("k=%d: Provision cancelado devolveu Session", k)
+		}
+		if err == nil {
+			t.Fatalf("k=%d: Provision cancelado devolveu erro nil", k)
+		}
+		left, _ := filepath.Glob(filepath.Join(tmp, "db-verify-sqlite-*"))
+		if len(left) != 0 {
+			t.Fatalf("k=%d: cópia temporária ficou para trás: %v", k, left)
+		}
+	}
+}

@@ -76,7 +76,9 @@ func (sqliteEngine) Expects() string {
 // Instantâneo por natureza: sem download de imagem, sem esperar servidor
 // ficar pronto.
 func (sqliteEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	opts.report("copiando arquivo para um temporário (o original nunca é tocado)…")
+	if err := opts.step(ctx, "copiando arquivo para um temporário (o original nunca é tocado)…"); err != nil {
+		return nil, err
+	}
 	tmpPath, err := sqliteCopyToTemp(b)
 	if err != nil {
 		return nil, fmt.Errorf("copiando para temporário: %w", err)
@@ -88,9 +90,19 @@ func (sqliteEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts
 		return nil, fmt.Errorf("abrindo cópia: %w", err)
 	}
 
-	opts.report("checando integridade…")
+	if err := opts.step(ctx, "checando integridade…"); err != nil {
+		db.Close()
+		os.Remove(tmpPath)
+		return nil, err
+	}
 	res, err := sqliteIntegrityCheck(ctx, db)
+	if err == nil {
+		// o integrity_check modela falha de consulta como erro de restore:
+		// um cancelamento no meio viraria Session, então o ctx decide.
+		err = ctx.Err()
+	}
 	if err != nil {
+		res.discardLog()
 		db.Close()
 		os.Remove(tmpPath)
 		return nil, err

@@ -20,7 +20,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"testing"
 )
@@ -86,6 +88,9 @@ func TestEngineConformance(t *testing.T) {
 			})
 			t.Run("backup truncado", func(t *testing.T) {
 				testConformanceTruncated(t, eng, fx)
+			})
+			t.Run("cancelamento em cada passo", func(t *testing.T) {
+				testConformanceCancel(t, eng, fx)
 			})
 		})
 	}
@@ -276,5 +281,75 @@ func testConformanceTruncated(t *testing.T, eng Engine, fx ConformanceFixture) {
 	}
 	if _, err := os.Stat(res.LogPath); err != nil {
 		t.Fatalf("log do restore não encontrado em %q: %v", res.LogPath, err)
+	}
+}
+
+// testConformanceCancel prova o contrato de Provision sob cancelamento: mede
+// n, o número de relatórios de Progress num Provision bem-sucedido, e para
+// cada k em 1..n cancela o ctx no k-ésimo relatório. Em todos os casos o
+// Provision devolve erro (nunca Session) e não resta container
+// db-verify-<pid>, nem parado. Engines sem container passam trivialmente
+// na segunda checagem, mas não na primeira.
+func testConformanceCancel(t *testing.T, eng Engine, fx ConformanceFixture) {
+	cb := fx.BuildValid(t)
+	backup, err := InspectDumpAs(cb.Path, eng.Name())
+	if err != nil {
+		t.Fatalf("InspectDumpAs: %v", err)
+	}
+
+	// Todas as engines usam o mesmo nome; um vazamento aqui faria os
+	// Provision seguintes falharem por nome em uso, então sempre removemos.
+	name := fmt.Sprintf("db-verify-%d", os.Getpid())
+	forceRemove := func() { _ = exec.Command("docker", "rm", "-f", name).Run() }
+	t.Cleanup(forceRemove)
+	requireNoContainer := func(t *testing.T, when string) {
+		t.Helper()
+		// containerExists usa `docker inspect`, que encontra o container em
+		// qualquer estado (Created/Exited inclusive), não só rodando.
+		if containerExists(name) {
+			forceRemove()
+			t.Fatalf("container %s existe %s", name, when)
+		}
+	}
+
+	requireNoContainer(t, "antes de medir os passos")
+	n := 0
+	opts := conformanceProvisionOpts()
+	opts.Progress = func(string, ...any) { n++ }
+	sess, err := eng.Provision(context.Background(), backup, opts)
+	if err != nil {
+		t.Fatalf("Provision (medindo os passos): %v", err)
+	}
+	if err := sess.Close(); err != nil {
+		t.Fatalf("Close (medindo os passos): %v", err)
+	}
+	if n == 0 {
+		t.Fatal("Provision não reportou nenhum progresso; não há passo onde cancelar")
+	}
+
+	for k := 1; k <= n; k++ {
+		t.Run(fmt.Sprintf("cancela no relatório %d de %d", k, n), func(t *testing.T) {
+			requireNoContainer(t, "antes do Provision")
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			opts := conformanceProvisionOpts()
+			opts.Progress = func(string, ...any) {
+				calls++
+				if calls == k {
+					cancel()
+				}
+			}
+			sess, err := eng.Provision(ctx, backup, opts)
+			if sess != nil {
+				sess.Close()
+				t.Fatalf("Provision cancelado devolveu Session (err=%v)", err)
+			}
+			if err == nil {
+				t.Fatal("Provision cancelado devolveu erro nil")
+			}
+			requireNoContainer(t, "depois do Provision cancelado")
+		})
 	}
 }

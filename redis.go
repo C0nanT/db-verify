@@ -130,18 +130,26 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		Port:  port,
 	}
 
-	opts.report("criando container %s (imagem %s)…", cont.Name, cont.Image)
+	if err := opts.step(ctx, "criando container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+		return nil, err
+	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		if err := cont.Create(ctx); err != nil {
 			return err
 		}
-		opts.report("posicionando o RDB no datadir (antes do servidor subir)…")
+		if err := opts.step(ctx, "posicionando o RDB no datadir (antes do servidor subir)…"); err != nil {
+			cont.Remove()
+			return err
+		}
 		if err := cont.CopyDump(ctx, b); err != nil {
 			cont.Remove()
 			return err
 		}
-		opts.report("subindo o Redis…")
+		if err := opts.step(ctx, "subindo o Redis…"); err != nil {
+			cont.Remove()
+			return err
+		}
 		if err := cont.StartContainer(ctx); err != nil {
 			cont.Remove()
 			return err
@@ -152,10 +160,23 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		return nil, err
 	}
 	if finalPort != port {
-		opts.report("porta %d livre, usando essa…", finalPort)
+		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+			cont.Remove()
+			return nil, err
+		}
 	}
-	opts.report("aguardando o Redis carregar o RDB…")
+	if err := opts.step(ctx, "aguardando o Redis carregar o RDB…"); err != nil {
+		cont.Remove()
+		return nil, err
+	}
 	res := cont.WaitReady(ctx, 30*time.Second)
+	// WaitReady modela o cancelamento como erro de restore; checar o ctx
+	// antes do ramo abaixo, senão um Ctrl+C devolveria uma Session.
+	if err := ctx.Err(); err != nil {
+		res.discardLog()
+		cont.Remove()
+		return nil, err
+	}
 
 	if len(res.Errors) > 0 {
 		// RDB inválido (ou o servidor morreu por outro motivo fatal de
@@ -168,7 +189,11 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	}
 
 	client := redisConnect(cont.Addr())
-	if err := client.Ping(ctx).Err(); err != nil {
+	err = client.Ping(ctx).Err()
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
 		client.Close()
 		cont.Remove()
 		return nil, fmt.Errorf("conexão falhou: %w", err)

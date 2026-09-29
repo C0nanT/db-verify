@@ -14,11 +14,15 @@ Spec: `.scratch/core-debt-fase1/SPEC.md` (seções "Limpeza nas engines Docker",
 
 **Blocked by:** 01 (helpers da conformidade morando com a suíte), 03 (retry de porta remove o container em qualquer falha)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Existe na suíte de conformidade um subteste genérico de cancelamento em cada passo, e ele passa para Postgres, MySQL, MariaDB, SQLite, Redis e Mongo.
-- [ ] O subteste verifica também containers parados (estado "Created"/"Exited"), e não só os que estão rodando.
-- [ ] Se uma `Session` for devolvida apesar do cancelamento, o subteste a fecha e falha.
-- [ ] O sinal SIGINT/SIGTERM cancela o ctx do `Provision`; a saída por cancelamento usa código 130.
-- [ ] Verificação manual registrada nos comentários do ticket: Ctrl+C durante o restore de um dump Postgres grande → sai em poucos segundos e `docker ps -a` não mostra `db-verify-<pid>`.
-- [ ] `./scripts/check full` passa.
+- [x] Existe na suíte de conformidade um subteste genérico de cancelamento em cada passo, e ele passa para Postgres, MySQL, MariaDB, SQLite, Redis e Mongo.
+- [x] O subteste verifica também containers parados (estado "Created"/"Exited"), e não só os que estão rodando.
+- [x] Se uma `Session` for devolvida apesar do cancelamento, o subteste a fecha e falha.
+- [x] O sinal SIGINT/SIGTERM cancela o ctx do `Provision`; a saída por cancelamento usa código 130.
+- [x] Verificação manual registrada nos comentários do ticket: Ctrl+C durante o restore de um dump Postgres grande → sai em poucos segundos e `docker ps -a` não mostra `db-verify-<pid>`.
+- [x] `./scripts/check full` passa.
+
+## Comentários
+
+**Verificação manual (2026-09-29, agente):** dump Postgres `-Fc` de 204,5 MB (tabela de 8M linhas + 3 índices, gerado com `generate_series`). Binário lançado sob `setsid`; 3 s depois de "restaurando (pode demorar)…" (container `db-verify-<pid>` "Up"), `kill -INT -- -<pgid>` no grupo de processos (emula o Ctrl+C do terminal, que atinge também o `docker exec` filho). Resultado: "! interrompido", código 130, saída em ~0,6 s, `docker ps -a --filter name=db-verify-<pid>` vazio. Repetido com `kill -TERM <pid>` (só o processo): mesmo resultado. Não foi um Ctrl+C de teclado de verdade, e sim o sinal equivalente enviado ao grupo de processos.
