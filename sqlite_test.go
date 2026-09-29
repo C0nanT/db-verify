@@ -526,7 +526,7 @@ func TestSQLiteSession_KeepPreservaTemporario(t *testing.T) {
 }
 
 // sqliteCollectionByName é uma cópia local do helper de busca linear que
-// docker_test.go define (collectionByName) — este arquivo roda sem a build
+// conformance_helpers_test.go define (collectionByName) — este arquivo roda sem a build
 // tag "docker", então não pode depender de símbolos que só existem atrás
 // dela.
 func sqliteCollectionByName(collections []Collection, name string) (Collection, bool) {

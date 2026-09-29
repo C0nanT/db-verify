@@ -8,8 +8,8 @@ Spec: `.scratch/core-debt-fase1/SPEC.md` (seção "Helpers de teste da suíte de
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Os quatro helpers estão definidos fora do teste de fluxo do Postgres, num arquivo com build tag `docker` junto da suíte de conformidade.
-- [ ] Removendo temporariamente o teste de fluxo do Postgres, `go vet -tags docker ./...` compila (verificação local; não commitar a remoção).
-- [ ] `./scripts/check fast` e `./scripts/check full` passam sem alterar nenhuma asserção.
+- [x] Os quatro helpers estão definidos fora do teste de fluxo do Postgres, num arquivo com build tag `docker` junto da suíte de conformidade.
+- [x] Removendo temporariamente o teste de fluxo do Postgres, `go vet -tags docker ./...` compila (verificação local; não commitar a remoção).
+- [x] `./scripts/check fast` e `./scripts/check full` passam sem alterar nenhuma asserção.

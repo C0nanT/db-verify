@@ -24,8 +24,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -96,21 +94,6 @@ INSERT INTO tbl_no_option (label, other) VALUES
   ('a', 'x'), ('b', 'y');
 `
 
-func requireDocker(t *testing.T) {
-	t.Helper()
-	if err := dockerAvailable(); err != nil {
-		t.Skipf("docker indisponível: %v", err)
-	}
-}
-
-func containerExists(name string) bool {
-	return exec.Command("docker", "inspect", name).Run() == nil
-}
-
-func uniqueName(part string) string {
-	return fmt.Sprintf("db-verify-test-%s-%d-%d", part, os.Getpid(), time.Now().UnixNano())
-}
-
 // waitDockerPostgres espera o banco de origem existir de verdade. pg_isready
 // sozinho aceita o servidor temporário da imagem oficial (antes de srcdb e
 // do restart) — o psql em seguida falha com "database does not exist" ou
@@ -176,17 +159,6 @@ func buildSourceDump(t *testing.T) string {
 		t.Fatalf("docker cp falhou: %s", strings.TrimSpace(string(out)))
 	}
 	return local
-}
-
-// collectionByName é um helper de busca linear — a lista de Collections não
-// é grande o bastante para justificar um índice.
-func collectionByName(collections []Collection, name string) (Collection, bool) {
-	for _, c := range collections {
-		if c.Name == name {
-			return c, true
-		}
-	}
-	return Collection{}, false
 }
 
 func TestFullFlow_Postgres(t *testing.T) {
