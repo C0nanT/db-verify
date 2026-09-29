@@ -388,7 +388,7 @@ func mongoConnect(ctx context.Context, uri string) (*mongo.Client, error) {
 }
 
 // mongoOrderFields é a mesma heurística de nomes de coluna compartilhada
-// pelas engines relacionais (orderColumnTiers, relational.go), achatada numa
+// pelas engines relacionais (orderColumnTiers, internal/relational/relational.go), achatada numa
 // lista única em ordem de preferência — o Mongo não tem information_schema
 // para inspecionar tipos de coluna sem consultar, então a decisão aqui é
 // feita a partir de uma amostra de documento (ver mongoChooseOrderField), não
@@ -425,7 +425,7 @@ func mongoChooseOrderField(sample bson.M) string {
 
 // mongoOrderHint descreve, numa linha, como Recent escolheu ordenar uma
 // coleção — equivalente ao orderHint compartilhado das engines relacionais
-// (relational.go), mas o fallback do Mongo nunca é "sem coluna": há sempre
+// (internal/relational/relational.go), mas o fallback do Mongo nunca é "sem coluna": há sempre
 // _id para ordenar por.
 func mongoOrderHint(field string) string {
 	if field == "" {

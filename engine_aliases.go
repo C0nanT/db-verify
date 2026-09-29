@@ -1,13 +1,17 @@
 package main
 
-// Apelidos TEMPORÁRIOS para o contrato que agora mora em internal/engine.
+// Apelidos TEMPORÁRIOS para o contrato que agora mora em internal/engine e
+// repasses para internal/relational (ao fim do arquivo).
 // Existem só para que o código que ainda está no pacote main (engines,
 // detecção, TUI, testes) continue compilando sem ser tocado enquanto a
 // migração para pacotes internos anda. Saem no ticket 13 da migração, quando
 // todo o código restante importar o pacote engine diretamente. Não adicione
 // nada novo aqui.
 
-import "db-verify/internal/engine"
+import (
+	"db-verify/internal/engine"
+	"db-verify/internal/relational"
+)
 
 type (
 	Match         = engine.Match
@@ -37,3 +41,19 @@ func Engines() []Engine { return engine.Engines() }
 
 // Lookup repassa para engine.Lookup.
 func Lookup(name string) (Engine, bool) { return engine.Lookup(name) }
+
+// Repasses TEMPORÁRIOS para o pacote internal/relational, pelo mesmo motivo
+// dos apelidos acima: as engines que ainda estão em main os usam pelos nomes
+// antigos. Saem junto com o movimento de cada engine.
+
+type relationalColumn = relational.Column
+
+var orderColumnTiers = relational.OrderColumnTiers
+
+func chooseRelationalOrderColumn(cols []relationalColumn, pk string, dateTypes map[string]bool) (string, bool) {
+	return relational.ChooseOrderColumn(cols, pk, dateTypes)
+}
+
+func sqlStringList(names []string) string { return relational.SQLStringList(names) }
+
+func orderHint(col string, byDate bool) string { return relational.OrderHint(col, byDate) }

@@ -8,9 +8,9 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seção "Pacotes").
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O pacote `relational` importa no máximo `engine` dentre os pacotes do projeto.
-- [ ] Os testes da heurística moram no pacote `relational`, sem asserção alterada.
-- [ ] Os repasses na raiz ficam junto dos apelidos do ticket 01.
-- [ ] `./scripts/check full` passa.
+- [x] O pacote `relational` importa no máximo `engine` dentre os pacotes do projeto.
+- [x] Os testes da heurística moram no pacote `relational`, sem asserção alterada.
+- [x] Os repasses na raiz ficam junto dos apelidos do ticket 01.
+- [x] `./scripts/check full` passa.

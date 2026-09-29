@@ -126,12 +126,12 @@ func TestMySQLChooseOrderColumn(t *testing.T) {
 		wantCol    string
 		wantByDate bool
 	}{
-		{"created_at", []mysqlColumn{{"id", "int"}, {"created_at", "datetime"}}, "id", "created_at", true},
-		{"nome em português: data_criacao", []mysqlColumn{{"data_criacao", "date"}}, "", "data_criacao", true},
-		{"nome em português: atualizado_em", []mysqlColumn{{"atualizado_em", "datetime"}}, "", "atualizado_em", true},
-		{"timestamp genérico sem nome conhecido", []mysqlColumn{{"some_moment", "timestamp"}}, "id", "some_moment", true},
-		{"só PK, sem coluna de data", []mysqlColumn{{"id", "int"}, {"label", "text"}}, "id", "id", false},
-		{"nem PK nem data", []mysqlColumn{{"label", "text"}}, "", "", false},
+		{"created_at", []mysqlColumn{{Name: "id", DataType: "int"}, {Name: "created_at", DataType: "datetime"}}, "id", "created_at", true},
+		{"nome em português: data_criacao", []mysqlColumn{{Name: "data_criacao", DataType: "date"}}, "", "data_criacao", true},
+		{"nome em português: atualizado_em", []mysqlColumn{{Name: "atualizado_em", DataType: "datetime"}}, "", "atualizado_em", true},
+		{"timestamp genérico sem nome conhecido", []mysqlColumn{{Name: "some_moment", DataType: "timestamp"}}, "id", "some_moment", true},
+		{"só PK, sem coluna de data", []mysqlColumn{{Name: "id", DataType: "int"}, {Name: "label", DataType: "text"}}, "id", "id", false},
+		{"nem PK nem data", []mysqlColumn{{Name: "label", DataType: "text"}}, "", "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
