@@ -11,9 +11,9 @@ package main
 // outras engines — main.go e a suíte de conformidade não precisam saber que
 // não houve container nenhum.
 //
-// A heurística de coluna de ordenação reusa mysqlColumn/chooseOrderColumn de
-// mysql.go: mesma lista compartilhada (relational.go), mesma decisão em Go
-// em vez de SQL — SQLite também não tem um jeito portável de "melhor coluna
+// A heurística de coluna de ordenação vem de relational.go
+// (chooseRelationalOrderColumn), com o conjunto de tipos de data desta engine:
+// mesma lista compartilhada, mesma decisão em Go em vez de SQL — SQLite também não tem um jeito portável de "melhor coluna
 // por tabela" via CTE que valha a pena reimplementar.
 //
 // Driver: modernc.org/sqlite (puro Go, sem cgo) — importante para o caso que
@@ -249,11 +249,16 @@ func (s *sqliteSession) sqliteTableNames(ctx context.Context) ([]string, error) 
 	return out, rows.Err()
 }
 
+// sqliteDateTypes são os tipos declarados do SQLite tratados como data/hora
+// na última camada da heurística. Hoje iguais aos do MySQL, mas próprios: o
+// SQLite tem tipagem por afinidade e pode divergir sem tocar o MySQL.
+var sqliteDateTypes = map[string]bool{"timestamp": true, "datetime": true, "date": true}
+
 // sqliteTableColumns devolve as colunas da tabela (nome + tipo declarado,
 // já em minúsculo para casar com a heurística compartilhada de
-// chooseOrderColumn) e o nome da coluna de PK quando ela é composta por uma
+// chooseRelationalOrderColumn) e o nome da coluna de PK quando ela é composta por uma
 // única coluna — mesma restrição "simples" do Postgres/MySQL.
-func (s *sqliteSession) sqliteTableColumns(ctx context.Context, table string) (cols []mysqlColumn, pk string, err error) {
+func (s *sqliteSession) sqliteTableColumns(ctx context.Context, table string) (cols []relationalColumn, pk string, err error) {
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", sqliteStringLiteral(table)))
 	if err != nil {
 		return nil, "", err
@@ -268,7 +273,7 @@ func (s *sqliteSession) sqliteTableColumns(ctx context.Context, table string) (c
 		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pkPos); err != nil {
 			return nil, "", err
 		}
-		cols = append(cols, mysqlColumn{Name: name, DataType: strings.ToLower(colType)})
+		cols = append(cols, relationalColumn{Name: name, DataType: strings.ToLower(colType)})
 		if pkPos > 0 {
 			pkCols = append(pkCols, name)
 		}
@@ -374,7 +379,7 @@ func (s *sqliteSession) Collections(ctx context.Context, exact bool) ([]Collecti
 		if err != nil {
 			return nil, err
 		}
-		orderCol, byDate := chooseOrderColumn(cols, pk)
+		orderCol, byDate := chooseRelationalOrderColumn(cols, pk, sqliteDateTypes)
 
 		var count int64
 		if err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", sqliteIdent(name))).Scan(&count); err != nil {

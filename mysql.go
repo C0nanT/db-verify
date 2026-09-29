@@ -381,42 +381,10 @@ func mysqlConnect(dsn string) (*sql.DB, error) {
 // última camada da heurística, quando nenhum nome conhecido casa.
 var mysqlDateTypes = map[string]bool{"timestamp": true, "datetime": true, "date": true}
 
-// columnPref devolve a preferência da coluna na heurística compartilhada
-// (orderColumnTiers, relational.go): 1..3 para os nomes conhecidos, em
-// ordem, 4 para qualquer outra coluna de data/hora, 9 para o resto (não
-// candidata a ordenação por data).
-func columnPref(name, dataType string) int {
-	for i, tier := range orderColumnTiers {
-		for _, n := range tier {
-			if name == n {
-				return i + 1
-			}
-		}
-	}
-	if mysqlDateTypes[dataType] {
-		return 4
-	}
-	return 9
-}
-
-// chooseOrderColumn aplica a heurística compartilhada às colunas de uma
-// tabela: a de menor preferência (columnPref) vence; sem nenhuma candidata a
-// data, cai para a PK simples (pk, "" se não houver); sem nenhuma das duas,
-// a tabela não tem coluna de ordenação.
+// chooseOrderColumn aplica a heurística compartilhada (relational.go) às
+// colunas de uma tabela MySQL/MariaDB, com os tipos de data de mysqlDateTypes.
 func chooseOrderColumn(cols []mysqlColumn, pk string) (orderCol string, byDate bool) {
-	best := 9
-	for _, c := range cols {
-		if p := columnPref(c.Name, c.DataType); p < best {
-			best, orderCol = p, c.Name
-		}
-	}
-	if orderCol != "" {
-		return orderCol, best <= 4
-	}
-	if pk != "" {
-		return pk, false
-	}
-	return "", false
+	return chooseRelationalOrderColumn(cols, pk, mysqlDateTypes)
 }
 
 // mysqlDescriptor é o Descriptor opaco que Collections anexa a cada
@@ -478,10 +446,9 @@ func (s *mysqlSession) Health(ctx context.Context) (*Health, error) {
 	}, nil
 }
 
-type mysqlColumn struct {
-	Name     string
-	DataType string
-}
+// mysqlColumn é a coluna neutra da heurística compartilhada; o alias mantém
+// os chamadores do MySQL/MariaDB como estão.
+type mysqlColumn = relationalColumn
 
 const mysqlTablesSQL = `SELECT table_name, table_rows, data_length + index_length
 FROM information_schema.tables

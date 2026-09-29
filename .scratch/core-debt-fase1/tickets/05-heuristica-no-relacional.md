@@ -10,11 +10,11 @@ Spec: `.scratch/core-debt-fase1/SPEC.md` (seção "Heurística de coluna de orde
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] A heurística (preferência, escolha e constante da camada de data) está definida no módulo relacional; o MySQL e o SQLite a consomem de lá.
-- [ ] O SQLite não referencia mais nenhum tipo nem função do MySQL para escolher a coluna de ordenação.
-- [ ] Teste unitário novo: empate na mesma camada → vence a menor posição ordinal; camada de data com tipos informados pelo dialeto; fallback para PK; nenhuma coluna.
-- [ ] Os testes existentes do MySQL e do SQLite sobre escolha de coluna passam **sem alteração**.
-- [ ] O comentário do módulo relacional lista todos os consumidores.
-- [ ] `./scripts/check fast` passa.
+- [x] A heurística (preferência, escolha e constante da camada de data) está definida no módulo relacional; o MySQL e o SQLite a consomem de lá.
+- [x] O SQLite não referencia mais nenhum tipo nem função do MySQL para escolher a coluna de ordenação.
+- [x] Teste unitário novo: empate na mesma camada → vence a menor posição ordinal; camada de data com tipos informados pelo dialeto; fallback para PK; nenhuma coluna.
+- [x] Os testes existentes do MySQL e do SQLite sobre escolha de coluna passam **sem alteração**.
+- [x] O comentário do módulo relacional lista todos os consumidores.
+- [x] `./scripts/check fast` passa.
