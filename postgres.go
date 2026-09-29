@@ -331,9 +331,11 @@ SELECT current_database(),
 // tablesSQL lista tabelas com contagem exata (via query_to_xml) ou estimada,
 // e já escolhe a melhor coluna para ordenar os "mais recentes": datas
 // conhecidas primeiro, senão qualquer timestamp/date, senão a PK simples.
+// Empate na mesma camada vai para a menor posição ordinal, como nos demais
+// engines relacionais.
 var tablesSQL = `
 WITH cols AS (
-  SELECT c.table_schema, c.table_name, c.column_name,
+  SELECT c.table_schema, c.table_name, c.column_name, c.ordinal_position,
          CASE
            WHEN c.column_name IN (` + sqlStringList(orderColumnTiers[0]) + `) THEN 1
            WHEN c.column_name IN (` + sqlStringList(orderColumnTiers[1]) + `) THEN 2
@@ -362,7 +364,7 @@ best AS (
   LEFT JOIN pk   p ON p.table_schema = t.table_schema AND p.table_name = t.table_name
   WHERE t.table_type = 'BASE TABLE'
     AND t.table_schema NOT IN ('pg_catalog','information_schema')
-  ORDER BY t.table_schema, t.table_name, c.pref NULLS LAST
+  ORDER BY t.table_schema, t.table_name, c.pref NULLS LAST, c.ordinal_position
 )
 SELECT b.table_schema, b.table_name,
        CASE WHEN $1 THEN

@@ -55,6 +55,11 @@ CREATE TABLE tbl_generic_ts (
     id serial PRIMARY KEY,
     some_moment timestamp NOT NULL
 );
+CREATE TABLE tbl_created_inserted (
+    id serial PRIMARY KEY,
+    created_at timestamp NOT NULL,
+    inserted_at timestamp NOT NULL
+);
 CREATE TABLE tbl_pk_only (
     id serial PRIMARY KEY,
     label text NOT NULL
@@ -86,6 +91,9 @@ INSERT INTO tbl_updated (updated_at) VALUES
 
 INSERT INTO tbl_generic_ts (some_moment) VALUES
   ('2024-01-01 10:00'), ('2024-01-02 10:00');
+
+INSERT INTO tbl_created_inserted (created_at, inserted_at) VALUES
+  ('2024-01-01 10:00', '2024-01-02 10:00');
 
 INSERT INTO tbl_pk_only (label) VALUES
   ('a'), ('b');
@@ -205,15 +213,16 @@ func TestFullFlow_Postgres(t *testing.T) {
 
 	t.Run("listagem devolve as tabelas esperadas com contagem exata", func(t *testing.T) {
 		want := map[string]int64{
-			"tbl_created":      25,
-			"tbl_data_criacao": 3,
-			"tbl_published":    2,
-			"tbl_data":         2,
-			"tbl_updated":      2,
-			"tbl_generic_ts":   2,
-			"tbl_pk_only":      2,
-			"tbl_no_option":    2,
-			"tbl_empty":        0,
+			"tbl_created":          25,
+			"tbl_data_criacao":     3,
+			"tbl_published":        2,
+			"tbl_data":             2,
+			"tbl_updated":          2,
+			"tbl_generic_ts":       2,
+			"tbl_created_inserted": 1,
+			"tbl_pk_only":          2,
+			"tbl_no_option":        2,
+			"tbl_empty":            0,
 		}
 		for name, wantRows := range want {
 			c, ok := collectionByName(collections, name)
@@ -256,6 +265,8 @@ func TestFullFlow_Postgres(t *testing.T) {
 				`SELECT * FROM "public"."tbl_updated" ORDER BY "updated_at" DESC LIMIT 20;`},
 			{"tbl_generic_ts", "some_moment", true,
 				`SELECT * FROM "public"."tbl_generic_ts" ORDER BY "some_moment" DESC LIMIT 20;`},
+			{"tbl_created_inserted", "created_at", true,
+				`SELECT * FROM "public"."tbl_created_inserted" ORDER BY "created_at" DESC LIMIT 20;`},
 			{"tbl_pk_only", "id", false,
 				`SELECT * FROM "public"."tbl_pk_only" ORDER BY "id" DESC LIMIT 20;`},
 			{"tbl_no_option", "", false,

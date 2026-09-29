@@ -8,9 +8,9 @@ Spec: `.scratch/core-debt-fase1/SPEC.md` (seção "Heurística de coluna de orde
 
 **Blocked by:** 05 (heurística de ordenação inteira no módulo relacional)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] A consulta de tabelas do Postgres usa a posição ordinal da coluna como critério depois da preferência.
-- [ ] O teste de fluxo completo do Postgres (tabela de camadas) ganha uma tabela com `created_at` e `inserted_at`, em que `created_at` tem posição ordinal menor: a ordenação escolhida é `created_at` e o hint indica data.
-- [ ] Os demais casos da tabela de camadas continuam passando sem alteração.
-- [ ] `./scripts/check full` passa.
+- [x] A consulta de tabelas do Postgres usa a posição ordinal da coluna como critério depois da preferência.
+- [x] O teste de fluxo completo do Postgres (tabela de camadas) ganha uma tabela com `created_at` e `inserted_at`, em que `created_at` tem posição ordinal menor: a ordenação escolhida é `created_at` e o hint indica data.
+- [x] Os demais casos da tabela de camadas continuam passando sem alteração.
+- [x] `./scripts/check full` passa.
