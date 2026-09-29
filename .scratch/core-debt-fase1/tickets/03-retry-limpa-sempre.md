@@ -10,10 +10,10 @@ Spec: `.scratch/core-debt-fase1/SPEC.md` (seções "Contrato" e "Helper de retry
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Um erro que não é conflito aborta o retry **e** registra `rm -f <nome>` (teste com `recRun`).
-- [ ] Com o ctx cancelado antes ou durante a tentativa, a remoção também é registrada, e o ctx que o `Run` falso recebe na remoção não está cancelado.
-- [ ] Os testes `TestStartWithPortRetry_*` existentes continuam passando; onde algum trava hoje a ausência de `rm` fora do conflito, a asserção é atualizada para o comportamento novo, com justificativa no commit.
-- [ ] O doc de `Engine.Provision` descreve a garantia de limpeza em caso de erro ou cancelamento.
-- [ ] `./scripts/check fast` passa.
+- [x] Um erro que não é conflito aborta o retry **e** registra `rm -f <nome>` (teste com `recRun`).
+- [x] Com o ctx cancelado antes ou durante a tentativa, a remoção também é registrada, e o ctx que o `Run` falso recebe na remoção não está cancelado.
+- [x] Os testes `TestStartWithPortRetry_*` existentes continuam passando; onde algum trava hoje a ausência de `rm` fora do conflito, a asserção é atualizada para o comportamento novo, com justificativa no commit.
+- [x] O doc de `Engine.Provision` descreve a garantia de limpeza em caso de erro ou cancelamento.
+- [x] `./scripts/check fast` passa.

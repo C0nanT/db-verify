@@ -29,6 +29,9 @@ const postgresPortWindow = 55432
 // listen e o docker publicar — e --port pula o scan.
 const maxPortRetries = 5
 
+// removeTimeout é o prazo do rm -f de limpeza, independente do ctx do chamador.
+const removeTimeout = 10 * time.Second
+
 // dockerRun executa `docker args...` e devolve stdout+stderr juntos.
 type dockerRun func(ctx context.Context, args ...string) ([]byte, error)
 
@@ -159,10 +162,21 @@ func isPortConflict(msg string) bool {
 
 // StartWithPortRetry chama attempt(port) a partir de startPort. Conflito
 // de porta: rm -f do nome fixo, aviso em stderr, próxima porta, até
-// maxPortRetries. Outro erro aborta. Esgotou: prompt; se libertou, um
-// segundo ciclo de cinco tentativas; segundo esgotamento é erro (sem loop).
+// maxPortRetries. Outro erro (ou ctx cancelado) aborta, também com rm -f do
+// nome: quem chama não precisa limpar o container de uma subida que falhou.
+// Esgotou: prompt; se libertou, um segundo ciclo de cinco tentativas;
+// segundo esgotamento é erro (sem loop).
 func (h *DockerHost) StartWithPortRetry(ctx context.Context, name string, startPort int, attempt func(port int) error) (int, error) {
 	return h.startWithPortRetry(ctx, name, startPort, attempt, false)
+}
+
+// removeContainer roda `rm -f name` com contexto próprio, sem herdar o
+// cancelamento do chamador (com o ctx já cancelado o docker rm nem
+// executaria) e com prazo curto. É idempotente: o container pode nem existir.
+func (h *DockerHost) removeContainer(ctx context.Context, name string) {
+	rmCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), removeTimeout)
+	defer cancel()
+	_, _ = h.run()(rmCtx, "rm", "-f", name)
 }
 
 func (h *DockerHost) startWithPortRetry(ctx context.Context, name string, startPort int, attempt func(port int) error, extraCycle bool) (int, error) {
@@ -171,6 +185,7 @@ func (h *DockerHost) startWithPortRetry(ctx context.Context, name string, startP
 	tried := make([]int, 0, maxPortRetries)
 	for i := 0; i < maxPortRetries; i++ {
 		if err := ctx.Err(); err != nil {
+			h.removeContainer(ctx, name)
 			return 0, err
 		}
 		tried = append(tried, port)
@@ -178,11 +193,11 @@ func (h *DockerHost) startWithPortRetry(ctx context.Context, name string, startP
 		if err == nil {
 			return port, nil
 		}
+		h.removeContainer(ctx, name)
 		if !isPortConflict(err.Error()) {
 			return 0, err
 		}
 		lastErr = err
-		_, _ = h.run()(ctx, "rm", "-f", name)
 		fmt.Fprintf(h.stderr(), "! porta %d já em uso, tentando %d…\n", port, port+1)
 		port++
 	}

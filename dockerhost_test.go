@@ -166,6 +166,52 @@ func TestStartWithPortRetry_ErroNaoConflitoAborta(t *testing.T) {
 	}
 }
 
+func TestStartWithPortRetry_ErroNaoConflitoRemoveContainer(t *testing.T) {
+	t.Parallel()
+	rec := &recRun{}
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: io.Discard, Stdin: strings.NewReader("")}
+	attempt, _ := scriptAttempt(errors.New("Unable to find image 'nope:99' locally"))
+	if _, err := h.StartWithPortRetry(context.Background(), "db-verify-1", 1, attempt); err == nil {
+		t.Fatal("queria erro")
+	}
+	if !rec.has("rm", "-f", "db-verify-1") {
+		t.Fatalf("rm -f não registrado: %v", rec.calls)
+	}
+}
+
+func TestStartWithPortRetry_CtxCanceladoRemoveComCtxVivo(t *testing.T) {
+	t.Parallel()
+	for _, quando := range []string{"antes", "durante"} {
+		t.Run(quando, func(t *testing.T) {
+			t.Parallel()
+			var rmCtxErr error
+			rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {
+				if args[0] == "rm" {
+					rmCtxErr = ctx.Err()
+				}
+				return nil, nil
+			}}
+			h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: io.Discard}
+			ctx, cancel := context.WithCancel(context.Background())
+			attempt := func(int) error { return nil }
+			if quando == "antes" {
+				cancel()
+			} else {
+				attempt = func(int) error { cancel(); return ctx.Err() }
+			}
+			if _, err := h.StartWithPortRetry(ctx, "c", 1, attempt); !errors.Is(err, context.Canceled) {
+				t.Fatalf("erro: %v", err)
+			}
+			if !rec.has("rm", "-f", "c") {
+				t.Fatalf("rm -f não registrado: %v", rec.calls)
+			}
+			if rmCtxErr != nil {
+				t.Fatalf("ctx do rm cancelado: %v", rmCtxErr)
+			}
+		})
+	}
+}
+
 func TestStartWithPortRetry_EsgotaSemContainerVaiAoErro(t *testing.T) {
 	t.Parallel()
 	rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {

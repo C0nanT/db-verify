@@ -149,6 +149,10 @@ type Engine interface {
 	// Provision é deliberadamente grosso: sobe o container, espera ficar
 	// pronto, copia o backup, restaura e conecta — para o número de seams
 	// no projeto continuar sendo um.
+	//
+	// Se devolve erro, inclusive por cancelamento do ctx, não resta container
+	// nem outro recurso externo criado por ela; ctx cancelado no meio resulta
+	// em erro, nunca numa Session parcialmente pronta.
 	Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error)
 }
 
