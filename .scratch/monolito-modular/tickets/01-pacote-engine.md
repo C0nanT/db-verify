@@ -8,11 +8,11 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seções "Pacotes" e "Ordem da migra�
 
 **Blocked by:** ticket 06 de `.scratch/core-debt-fase1/` (desempate ordinal no Postgres)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O pacote `engine` não importa nenhum outro pacote do projeto.
-- [ ] Os testes do contrato (por exemplo `Collection.Qualified` e o registro) moram no pacote `engine`.
-- [ ] O código que continua na raiz compila sem editar os arquivos das engines, da detecção nem da TUI (só a camada de apelidos é nova).
-- [ ] Os apelidos na raiz ficam num arquivo só, com comentário em pt-BR dizendo que são temporários e que saem no ticket 13.
-- [ ] Nenhuma asserção de teste existente foi alterada.
-- [ ] `./scripts/check full` passa.
+- [x] O pacote `engine` não importa nenhum outro pacote do projeto.
+- [x] Os testes do contrato (por exemplo `Collection.Qualified` e o registro) moram no pacote `engine`.
+- [x] O código que continua na raiz compila sem editar os arquivos da detecção nem da TUI (só a camada de apelidos é nova). Nas engines, só edições mecânicas forçadas pelo Go: chamadas renomeadas para `Step`/`DiscardLog` (apelido de tipo não carrega método) e literais de `HealthField` com campos nomeados (`go vet` composites).
+- [x] Os apelidos na raiz ficam num arquivo só, com comentário em pt-BR dizendo que são temporários e que saem no ticket 13.
+- [x] Nenhuma asserção de teste existente foi alterada.
+- [x] `./scripts/check full` passa.

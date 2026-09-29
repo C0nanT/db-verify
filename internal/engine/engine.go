@@ -1,4 +1,8 @@
-package main
+// Package engine é o contrato das engines de banco: as interfaces
+// Engine/Session, os tipos que circulam entre elas e quem as chama, e o
+// registro (Register/Engines/Lookup). Não importa nenhum outro pacote do
+// projeto.
+package engine
 
 import (
 	"context"
@@ -36,7 +40,7 @@ type Backup struct {
 	Version     string
 	OriginDB    string
 	// Guessed é true quando a engine venceu por palpite (Confidence <=
-	// guessConfidence), não por magic bytes ou extensão — a ambiguidade
+	// ConfidenceGuess), não por magic bytes ou extensão — a ambiguidade
 	// conhecida do .sql sem cabeçalho identificável. Forced é true quando o
 	// operador escolheu a engine via --engine, pulando a disputa entre
 	// engines.
@@ -64,11 +68,11 @@ func (o ProvisionOpts) report(format string, a ...any) {
 	}
 }
 
-// step reporta o início de um passo do Provision e devolve ctx.Err(): é o
+// Step reporta o início de um passo do Provision e devolve ctx.Err(): é o
 // ponto de checagem entre passos, para que um cancelamento (Ctrl+C) vire
 // erro em vez de o Provision seguir para o próximo passo. Quem recebe erro
 // daqui limpa o que já criou antes de devolvê-lo.
-func (o ProvisionOpts) step(ctx context.Context, format string, a ...any) error {
+func (o ProvisionOpts) Step(ctx context.Context, format string, a ...any) error {
 	o.report(format, a...)
 	return ctx.Err()
 }
@@ -146,10 +150,10 @@ type RestoreResult struct {
 	ExitCode int
 }
 
-// discardLog apaga o log do restore em arquivo, se houver. Usado quando o
+// DiscardLog apaga o log do restore em arquivo, se houver. Usado quando o
 // Provision falha (ou é cancelado) depois do restore: o log é um recurso
 // externo que ninguém mais vai ver. Aceita receptor nil.
-func (r *RestoreResult) discardLog() {
+func (r *RestoreResult) DiscardLog() {
 	if r != nil && r.LogPath != "" {
 		_ = os.Remove(r.LogPath)
 	}

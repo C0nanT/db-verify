@@ -107,7 +107,7 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 		Port:   port, DB: db, User: "root", Pass: "root",
 	}
 
-	if err := opts.step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
@@ -118,12 +118,12 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 		return nil, err
 	}
 	if finalPort != port {
-		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+		if err := opts.Step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
 			cont.Remove()
 			return nil, err
 		}
 	}
-	if err := opts.step(ctx, "aguardando o MariaDB ficar pronto…"); err != nil {
+	if err := opts.Step(ctx, "aguardando o MariaDB ficar pronto…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 		cont.Remove()
 		return nil, err
 	}
-	if err := opts.step(ctx, "copiando dump para o container…"); err != nil {
+	if err := opts.Step(ctx, "copiando dump para o container…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 		cont.Remove()
 		return nil, err
 	}
-	if err := opts.step(ctx, "restaurando (pode demorar)…"); err != nil {
+	if err := opts.Step(ctx, "restaurando (pode demorar)…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -150,14 +150,14 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 		err = ctx.Err()
 	}
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
 
 	conn, err := mysqlConnect(cont.DSN())
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, fmt.Errorf("conexão falhou: %w", err)
 	}
@@ -165,7 +165,7 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 	// durante a conexão devolveria uma Session.
 	if err := ctx.Err(); err != nil {
 		conn.Close()
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}

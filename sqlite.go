@@ -76,7 +76,7 @@ func (sqliteEngine) Expects() string {
 // Instantâneo por natureza: sem download de imagem, sem esperar servidor
 // ficar pronto.
 func (sqliteEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := opts.step(ctx, "copiando arquivo para um temporário (o original nunca é tocado)…"); err != nil {
+	if err := opts.Step(ctx, "copiando arquivo para um temporário (o original nunca é tocado)…"); err != nil {
 		return nil, err
 	}
 	tmpPath, err := sqliteCopyToTemp(b)
@@ -90,7 +90,7 @@ func (sqliteEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts
 		return nil, fmt.Errorf("abrindo cópia: %w", err)
 	}
 
-	if err := opts.step(ctx, "checando integridade…"); err != nil {
+	if err := opts.Step(ctx, "checando integridade…"); err != nil {
 		db.Close()
 		os.Remove(tmpPath)
 		return nil, err
@@ -102,7 +102,7 @@ func (sqliteEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts
 		err = ctx.Err()
 	}
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		db.Close()
 		os.Remove(tmpPath)
 		return nil, err
@@ -355,11 +355,11 @@ func (s *sqliteSession) Health(ctx context.Context) (*Health, error) {
 		Name: s.origName,
 		Size: humanSize(st.Size()),
 		Fields: []HealthField{
-			{"tabelas", fmt.Sprint(tables)},
-			{"views", fmt.Sprint(views)},
-			{"índices", fmt.Sprint(indexes)},
-			{"gatilhos", fmt.Sprint(triggers)},
-			{"fks", fmt.Sprint(fks)},
+			{Label: "tabelas", Value: fmt.Sprint(tables)},
+			{Label: "views", Value: fmt.Sprint(views)},
+			{Label: "índices", Value: fmt.Sprint(indexes)},
+			{Label: "gatilhos", Value: fmt.Sprint(triggers)},
+			{Label: "fks", Value: fmt.Sprint(fks)},
 		},
 	}, nil
 }

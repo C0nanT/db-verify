@@ -130,7 +130,7 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		Port:  port,
 	}
 
-	if err := opts.step(ctx, "criando container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+	if err := opts.Step(ctx, "criando container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
@@ -138,7 +138,7 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		if err := cont.Create(ctx); err != nil {
 			return err
 		}
-		if err := opts.step(ctx, "posicionando o RDB no datadir (antes do servidor subir)…"); err != nil {
+		if err := opts.Step(ctx, "posicionando o RDB no datadir (antes do servidor subir)…"); err != nil {
 			cont.Remove()
 			return err
 		}
@@ -146,7 +146,7 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 			cont.Remove()
 			return err
 		}
-		if err := opts.step(ctx, "subindo o Redis…"); err != nil {
+		if err := opts.Step(ctx, "subindo o Redis…"); err != nil {
 			cont.Remove()
 			return err
 		}
@@ -160,12 +160,12 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		return nil, err
 	}
 	if finalPort != port {
-		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+		if err := opts.Step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
 			cont.Remove()
 			return nil, err
 		}
 	}
-	if err := opts.step(ctx, "aguardando o Redis carregar o RDB…"); err != nil {
+	if err := opts.Step(ctx, "aguardando o Redis carregar o RDB…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	// WaitReady modela o cancelamento como erro de restore; checar o ctx
 	// antes do ramo abaixo, senão um Ctrl+C devolveria uma Session.
 	if err := ctx.Err(); err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
@@ -566,13 +566,13 @@ func (s *redisSession) Health(ctx context.Context) (*Health, error) {
 		return nil, err
 	}
 
-	fields := []HealthField{{"chaves", fmt.Sprint(dbSize)}} // DBSIZE é sempre exato no Redis (SPEC.md)
+	fields := []HealthField{{Label: "chaves", Value: fmt.Sprint(dbSize)}} // DBSIZE é sempre exato no Redis (SPEC.md)
 	for _, typ := range redisHealthTypes {
-		fields = append(fields, HealthField{typ, fmt.Sprint(scan.TypeCounts[typ])})
+		fields = append(fields, HealthField{Label: typ, Value: fmt.Sprint(scan.TypeCounts[typ])})
 	}
-	fields = append(fields, HealthField{"com TTL", fmt.Sprint(scan.WithTTL)})
+	fields = append(fields, HealthField{Label: "com TTL", Value: fmt.Sprint(scan.WithTTL)})
 	if scan.Truncated {
-		fields = append(fields, HealthField{"amostragem", fmt.Sprintf("parcial (%d/%d chaves)", scan.Scanned, dbSize)})
+		fields = append(fields, HealthField{Label: "amostragem", Value: fmt.Sprintf("parcial (%d/%d chaves)", scan.Scanned, dbSize)})
 	}
 
 	return &Health{Name: "db0", Size: used, Fields: fields}, nil

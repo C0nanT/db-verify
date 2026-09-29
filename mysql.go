@@ -139,7 +139,7 @@ func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		Port:   port, DB: db, User: "root", Pass: "root",
 	}
 
-	if err := opts.step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
@@ -150,12 +150,12 @@ func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		return nil, err
 	}
 	if finalPort != port {
-		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+		if err := opts.Step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
 			cont.Remove()
 			return nil, err
 		}
 	}
-	if err := opts.step(ctx, "aguardando o MySQL ficar pronto…"); err != nil {
+	if err := opts.Step(ctx, "aguardando o MySQL ficar pronto…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		cont.Remove()
 		return nil, err
 	}
-	if err := opts.step(ctx, "copiando dump para o container…"); err != nil {
+	if err := opts.Step(ctx, "copiando dump para o container…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		cont.Remove()
 		return nil, err
 	}
-	if err := opts.step(ctx, "restaurando (pode demorar)…"); err != nil {
+	if err := opts.Step(ctx, "restaurando (pode demorar)…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -182,14 +182,14 @@ func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		err = ctx.Err()
 	}
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
 
 	conn, err := mysqlConnect(cont.DSN())
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, fmt.Errorf("conexão falhou: %w", err)
 	}
@@ -197,7 +197,7 @@ func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	// durante a conexão devolveria uma Session.
 	if err := ctx.Err(); err != nil {
 		conn.Close()
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
@@ -436,12 +436,12 @@ func (s *mysqlSession) Health(ctx context.Context) (*Health, error) {
 		Name: name,
 		Size: humanSize(sizeBytes),
 		Fields: []HealthField{
-			{"tabelas", fmt.Sprint(tables)},
-			{"views", fmt.Sprint(views)},
-			{"índices", fmt.Sprint(indexes)},
-			{"fks", fmt.Sprint(fks)},
-			{"procedures", fmt.Sprint(procs)},
-			{"gatilhos", fmt.Sprint(triggers)},
+			{Label: "tabelas", Value: fmt.Sprint(tables)},
+			{Label: "views", Value: fmt.Sprint(views)},
+			{Label: "índices", Value: fmt.Sprint(indexes)},
+			{Label: "fks", Value: fmt.Sprint(fks)},
+			{Label: "procedures", Value: fmt.Sprint(procs)},
+			{Label: "gatilhos", Value: fmt.Sprint(triggers)},
 		},
 	}, nil
 }

@@ -101,7 +101,7 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 		Port:  port, DB: opts.DBName, User: "postgres", Pass: "postgres",
 	}
 
-	if err := opts.step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
@@ -112,12 +112,12 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 		return nil, err
 	}
 	if finalPort != port {
-		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+		if err := opts.Step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
 			cont.Remove()
 			return nil, err
 		}
 	}
-	if err := opts.step(ctx, "aguardando o Postgres ficar pronto…"); err != nil {
+	if err := opts.Step(ctx, "aguardando o Postgres ficar pronto…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 		cont.Remove()
 		return nil, err
 	}
-	if err := opts.step(ctx, "copiando dump para o container…"); err != nil {
+	if err := opts.Step(ctx, "copiando dump para o container…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 		cont.Remove()
 		return nil, err
 	}
-	if err := opts.step(ctx, "restaurando (pode demorar)…"); err != nil {
+	if err := opts.Step(ctx, "restaurando (pode demorar)…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -144,20 +144,20 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 		err = ctx.Err()
 	}
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
 
 	pool, err := pgConnect(ctx, cont.DSN())
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, fmt.Errorf("conexão falhou: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		pool.Close()
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
@@ -414,11 +414,11 @@ func (s *pgSession) Health(ctx context.Context) (*Health, error) {
 		Name: name,
 		Size: size,
 		Fields: []HealthField{
-			{"tabelas", fmt.Sprint(tables)},
-			{"views", fmt.Sprint(views)},
-			{"índices", fmt.Sprint(indexes)},
-			{"funções", fmt.Sprint(funcs)},
-			{"fks", fmt.Sprint(fks)},
+			{Label: "tabelas", Value: fmt.Sprint(tables)},
+			{Label: "views", Value: fmt.Sprint(views)},
+			{Label: "índices", Value: fmt.Sprint(indexes)},
+			{Label: "funções", Value: fmt.Sprint(funcs)},
+			{Label: "fks", Value: fmt.Sprint(fks)},
 		},
 	}, nil
 }

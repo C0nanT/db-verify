@@ -2,9 +2,9 @@ package main
 
 // Testes de caracterização das partes de postgres.go que não dependem de um
 // banco vivo: montagem do SQL de "recentes" (pgRecentQuery, antes
-// TableInfo.RecentQuery), o nome de exibição de uma coleção
-// (Collection.Qualified, antes TableInfo.Qualified) e formatação de valores
-// (formatValue). A heurística de escolha da coluna de ordenação em si vive
+// TableInfo.RecentQuery) e formatação de valores (formatValue). O nome de
+// exibição de uma coleção (Collection.Qualified, antes TableInfo.Qualified)
+// é contrato e é testado no pacote engine. A heurística de escolha da coluna de ordenação em si vive
 // dentro de tablesSQL (uma query SQL, não Go) e por isso só pode ser
 // caracterizada com um Postgres de verdade — ver docker_test.go.
 //
@@ -51,14 +51,6 @@ func TestPGRecentQuery(t *testing.T) {
 				t.Errorf("pgRecentQuery() = %q, want %q", got, tc.want)
 			}
 		})
-	}
-}
-
-// TestCollection_Qualified caracteriza a concatenação namespace.nome.
-func TestCollection_Qualified(t *testing.T) {
-	c := Collection{Namespace: "public", Name: "pedidos"}
-	if got, want := c.Qualified(), "public.pedidos"; got != want {
-		t.Errorf("Qualified() = %q, want %q", got, want)
 	}
 }
 

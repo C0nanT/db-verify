@@ -151,7 +151,7 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		Port:  port,
 	}
 
-	if err := opts.step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
+	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
 	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
@@ -162,7 +162,7 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		return nil, err
 	}
 	if finalPort != port {
-		if err := opts.step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
+		if err := opts.Step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
 			cont.Remove()
 			return nil, err
 		}
@@ -170,7 +170,7 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	// O Mongo demora mais para ficar pronto que as demais engines (ticket
 	// 09: "o timeout de 'ficar pronto' é específico do Mongo") — imagem
 	// maior e inicialização em duas etapas (bootstrap + servidor real).
-	if err := opts.step(ctx, "aguardando o MongoDB ficar pronto…"); err != nil {
+	if err := opts.Step(ctx, "aguardando o MongoDB ficar pronto…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		cont.Remove()
 		return nil, err
 	}
-	if err := opts.step(ctx, "restaurando via mongorestore --archive (pode demorar)…"); err != nil {
+	if err := opts.Step(ctx, "restaurando via mongorestore --archive (pode demorar)…"); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -189,14 +189,14 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 		err = ctx.Err()
 	}
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
 
 	client, err := mongoConnect(ctx, cont.URI())
 	if err != nil {
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, fmt.Errorf("conexão falhou: %w", err)
 	}
@@ -207,7 +207,7 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	}
 	if err != nil {
 		mongoDisconnect(ctx, client)
-		res.discardLog()
+		res.DiscardLog()
 		cont.Remove()
 		return nil, err
 	}
@@ -608,8 +608,8 @@ func (s *mongoSession) Health(ctx context.Context) (*Health, error) {
 		Name: mongoHealthName(s.dbNames),
 		Size: humanSize(totalSize),
 		Fields: []HealthField{
-			{"coleções", fmt.Sprint(totalCollections)},
-			{"índices", fmt.Sprint(totalIndexes)},
+			{Label: "coleções", Value: fmt.Sprint(totalCollections)},
+			{Label: "índices", Value: fmt.Sprint(totalIndexes)},
 		},
 	}, nil
 }
