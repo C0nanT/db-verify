@@ -79,7 +79,7 @@ func (pgEngine) Expects() string {
 // um. opts.Progress, se houver, é chamado a cada fase para o chamador
 // imprimir o mesmo acompanhamento de sempre.
 func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(); err != nil {
+	if err := dockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 

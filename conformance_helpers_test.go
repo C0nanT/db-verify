@@ -7,6 +7,7 @@ package main
 // para ela compilar sem depender do teste de fluxo completo do Postgres.
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,7 +17,7 @@ import (
 
 func requireDocker(t *testing.T) {
 	t.Helper()
-	if err := dockerAvailable(); err != nil {
+	if err := dockerAvailable(context.Background()); err != nil {
 		t.Skipf("docker indisponível: %v", err)
 	}
 }

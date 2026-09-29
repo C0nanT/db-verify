@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // postgresPortWindow é o início da janela Postgres quando --port não veio.
@@ -92,8 +93,15 @@ func (h *DockerHost) stdout() io.Writer {
 // defaultDockerHost é o host de produção usado pelas engines.
 var defaultDockerHost = &DockerHost{}
 
-func dockerAvailable() error {
-	return defaultDockerHost.Available(context.Background())
+// dockerCheckTimeout limita a checagem do Docker: daemon travado não pode
+// bloquear o Provision para sempre.
+const dockerCheckTimeout = 10 * time.Second
+
+// dockerAvailable aplica dockerCheckTimeout sobre o ctx do Provision.
+func dockerAvailable(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, dockerCheckTimeout)
+	defer cancel()
+	return defaultDockerHost.Available(ctx)
 }
 
 // freePort procura uma porta livre a partir de 55432 (janela Postgres).
@@ -112,12 +120,17 @@ func startWithPortRetry(ctx context.Context, name string, startPort int, attempt
 }
 
 // Available verifica se o binário docker está no PATH e o daemon responde.
+// Os erros encadeiam a causa original e, quando o daemon falha, trazem a
+// saída do `docker info` (permissão no socket, daemon parado, DOCKER_HOST).
 func (h *DockerHost) Available(ctx context.Context) error {
 	if _, err := h.lookPath()("docker"); err != nil {
-		return fmt.Errorf("docker não encontrado no PATH")
+		return fmt.Errorf("docker não encontrado no PATH: %w", err)
 	}
-	if _, err := h.run()(ctx, "info"); err != nil {
-		return fmt.Errorf("docker daemon não está acessível")
+	if out, err := h.run()(ctx, "info"); err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("docker daemon não está acessível: %s: %w", msg, err)
+		}
+		return fmt.Errorf("docker daemon não está acessível: %w", err)
 	}
 	return nil
 }

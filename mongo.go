@@ -135,7 +135,7 @@ var mongoSystemDBs = map[string]bool{"admin": true, "local": true, "config": tru
 // archive via mongorestore lendo de stdin (sem arquivo intermediário dentro
 // do container) e conecta — mesmo formato grosso das demais engines.
 func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(); err != nil {
+	if err := dockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 

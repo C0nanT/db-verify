@@ -86,7 +86,7 @@ func (mariadbEngine) Expects() string {
 // conecta — mesmo formato grosso das demais engines. Reusa mysqlContainer e
 // mysqlSession inteiros; só Image e Client mudam.
 func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(); err != nil {
+	if err := dockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 

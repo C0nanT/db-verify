@@ -114,7 +114,7 @@ const redisDefaultPort = 6379
 // Redis só carrega o RDB durante a inicialização — colocar o arquivo depois
 // do start não faz efeito nenhum.
 func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(); err != nil {
+	if err := dockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 

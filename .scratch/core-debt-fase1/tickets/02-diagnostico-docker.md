@@ -8,11 +8,11 @@ Spec: `.scratch/core-debt-fase1/SPEC.md` (seção "Checagem do Docker"). Linha 3
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O erro de `Available` contém a saída do `docker info` (sem espaços nas pontas) e encadeia o erro original (recuperável com `errors.Is`/`errors.As`); o erro de "não encontrado no PATH" também encadeia o original.
-- [ ] O wrapper usado pelas engines recebe o ctx do `Provision` e aplica um prazo fixo sobre ele; as 5 engines Docker passam o ctx.
-- [ ] Teste unitário com `Run` falso (`recRun`) que devolve saída e erro: a mensagem contém a saída e o erro original.
-- [ ] Teste unitário com `Run` bloqueante e ctx com prazo curto: `Available` retorna logo, com erro de prazo.
-- [ ] O teste existente de `Available` continua passando sem mudar as substrings verificadas.
-- [ ] `./scripts/check fast` passa.
+- [x] O erro de `Available` contém a saída do `docker info` (sem espaços nas pontas) e encadeia o erro original (recuperável com `errors.Is`/`errors.As`); o erro de "não encontrado no PATH" também encadeia o original.
+- [x] O wrapper usado pelas engines recebe o ctx do `Provision` e aplica um prazo fixo sobre ele; as 5 engines Docker passam o ctx.
+- [x] Teste unitário com `Run` falso (`recRun`) que devolve saída e erro: a mensagem contém a saída e o erro original.
+- [x] Teste unitário com `Run` bloqueante e ctx com prazo curto: `Available` retorna logo, com erro de prazo.
+- [x] O teste existente de `Available` continua passando sem mudar as substrings verificadas.
+- [x] `./scripts/check fast` passa.

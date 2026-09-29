@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestIsPortConflict(t *testing.T) {
@@ -321,6 +322,63 @@ func TestDockerHost_Available(t *testing.T) {
 	}
 	if err := h.Available(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDockerHost_Available_IncluiSaidaEChainErro(t *testing.T) {
+	t.Parallel()
+	orig := errors.New("exit status 1")
+	rec := &recRun{fn: func(context.Context, ...string) ([]byte, error) {
+		return []byte("  permission denied on /var/run/docker.sock\n"), orig
+	}}
+	h := &DockerHost{
+		LookPath: func(string) (string, error) { return "/usr/bin/docker", nil },
+		Run:      rec.Run,
+	}
+	err := h.Available(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "permission denied on /var/run/docker.sock") {
+		t.Fatalf("saída ausente: %v", err)
+	}
+	if !strings.Contains(err.Error(), "não está acessível") {
+		t.Fatalf("prefixo ausente: %v", err)
+	}
+	if !errors.Is(err, orig) {
+		t.Fatalf("erro original não encadeado: %v", err)
+	}
+	if !strings.Contains(err.Error(), ": permission denied on /var/run/docker.sock: exit status 1") {
+		t.Fatalf("saída sem trim: %q", err)
+	}
+}
+
+func TestDockerHost_Available_PathEncadeiaErro(t *testing.T) {
+	t.Parallel()
+	orig := errors.New("not found")
+	h := &DockerHost{LookPath: func(string) (string, error) { return "", orig }}
+	if err := h.Available(context.Background()); !errors.Is(err, orig) {
+		t.Fatalf("erro original não encadeado: %v", err)
+	}
+}
+
+func TestDockerHost_Available_PrazoCurto(t *testing.T) {
+	t.Parallel()
+	h := &DockerHost{
+		LookPath: func(string) (string, error) { return "/usr/bin/docker", nil },
+		Run: func(ctx context.Context, _ ...string) ([]byte, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- h.Available(ctx) }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("esperava prazo: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Available não retornou no prazo")
 	}
 }
 

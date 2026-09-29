@@ -118,7 +118,7 @@ func (mysqlEngine) Expects() string {
 // conecta — mesmo formato grosso de pgEngine.Provision, para o número de
 // seams continuar sendo um.
 func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(); err != nil {
+	if err := dockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 
