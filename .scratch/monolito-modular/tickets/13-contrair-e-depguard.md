@@ -12,10 +12,10 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seção "Fronteiras fiscalizadas").
 
 **Blocked by:** 05, 05b, 06, 08, 09, 10, 11, 12
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] A raiz tem só o `main` (flags, `run()`, lista explícita de engines) e os testes do conjunto montado; nenhum apelido ou repasse temporário sobra.
-- [ ] As regras acima estão no `.golangci.yml`, com comentário em pt-BR.
-- [ ] Uma importação proibida feita de propósito (por exemplo uma engine importando outra) faz `./scripts/check fast` reprovar. Mudança revertida depois.
-- [ ] `scripts/check` e os hooks não foram alterados.
-- [ ] `./scripts/check full` passa.
+- [x] A raiz tem só o `main` (flags, `run()`, lista explícita de engines) e os testes do conjunto montado; nenhum apelido ou repasse temporário sobra.
+- [x] As regras acima estão no `.golangci.yml`, com comentário em pt-BR.
+- [x] Uma importação proibida feita de propósito (por exemplo uma engine importando outra) faz `./scripts/check fast` reprovar. Mudança revertida depois.
+- [x] `scripts/check` e os hooks não foram alterados.
+- [x] `./scripts/check full` passa.

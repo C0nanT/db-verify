@@ -10,6 +10,7 @@ package main
 // reconheceu", testados com engines fictícias, vivem em internal/detect.
 
 import (
+	"db-verify/internal/detect"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,7 +45,7 @@ func createSparseFile(t *testing.T, header string, size int64) (string, error) {
 // resultado usa o que ela conseguiu extrair (aqui, nada) em vez de cair
 // noutra engine ou falhar.
 func TestInspectDumpAs_ForcaEngineESepulaDisputa(t *testing.T) {
-	info, err := InspectDumpAs("testdata/headers/plain.sql", "postgres")
+	info, err := detect.InspectDumpAs("testdata/headers/plain.sql", "postgres")
 	if err != nil {
 		t.Fatalf("InspectDumpAs: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestInspectDumpAs_ForcaEngineESepulaDisputa(t *testing.T) {
 // TestInspectDumpAs_EngineInexistente: --engine com nome que não está
 // registrado falha com um erro que lista as engines disponíveis.
 func TestInspectDumpAs_EngineInexistente(t *testing.T) {
-	_, err := InspectDumpAs("testdata/headers/plain.sql", "oracle")
+	_, err := detect.InspectDumpAs("testdata/headers/plain.sql", "oracle")
 	if err == nil {
 		t.Fatalf("esperava erro para engine inexistente")
 	}
@@ -73,7 +74,7 @@ func TestInspectDumpAs_EngineInexistente(t *testing.T) {
 // em Postgres por palpite, e o resultado é marcado como Guessed para o
 // chamador (main.go) avisar e sugerir --engine.
 func TestInspectDump_PlainSQLAmbiguoCaiEmPostgresComPalpite(t *testing.T) {
-	info, err := InspectDump("testdata/headers/random.txt")
+	info, err := detect.InspectDump("testdata/headers/random.txt")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}
@@ -88,7 +89,7 @@ func TestInspectDump_PlainSQLAmbiguoCaiEmPostgresComPalpite(t *testing.T) {
 // TestInspectDump_MagicNaoEhPalpite: um cabeçalho reconhecido por magic
 // bytes não deve ser marcado como Guessed.
 func TestInspectDump_MagicNaoEhPalpite(t *testing.T) {
-	info, err := InspectDump("testdata/headers/custom.dump")
+	info, err := detect.InspectDump("testdata/headers/custom.dump")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}
@@ -112,7 +113,7 @@ func TestInspectDump_Zstd(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
-			info, err := InspectDump(tc.path)
+			info, err := detect.InspectDump(tc.path)
 			if err != nil {
 				t.Fatalf("InspectDump(%q): %v", tc.path, err)
 			}
@@ -140,7 +141,7 @@ func TestInspectDump_Bzip2(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
-			info, err := InspectDump(tc.path)
+			info, err := detect.InspectDump(tc.path)
 			if err != nil {
 				t.Fatalf("InspectDump(%q): %v", tc.path, err)
 			}
@@ -168,7 +169,7 @@ func TestInspectDump_ArquivoEnormeNaoTrava(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := InspectDump(f)
+		_, err := detect.InspectDump(f)
 		done <- err
 	}()
 	select {

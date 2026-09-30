@@ -12,6 +12,43 @@ linters:
     - ineffassign
     - staticcheck
     - unused
+    - depguard
+
+linters-settings:
+  # Direção das dependências entre os pacotes do projeto (ver CLAUDE.md, seção
+  # Architecture). O compilador já esconde o que é privado de cada pacote; estas
+  # regras reprovam importações públicas que invertem a direção permitida.
+  depguard:
+    rules:
+      # Uma engine não conhece outra engine, a interface do terminal nem a
+      # detecção. Código comum vai para relational, docker ou dumpio.
+      engines:
+        files:
+          - "**/engines/**"
+        deny:
+          - pkg: db-verify/engines
+            desc: engine não importa outra engine (extraia para internal/relational ou internal/docker)
+          - pkg: db-verify/internal/ui
+            desc: engine não importa a interface do terminal
+          - pkg: db-verify/internal/detect
+            desc: engine não importa a detecção
+      # ui e detect dependem só do contrato (internal/engine), nunca de uma
+      # engine concreta.
+      contrato-apenas:
+        files:
+          - "**/internal/ui/**"
+          - "**/internal/detect/**"
+        deny:
+          - pkg: db-verify/engines
+            desc: ui e detect conhecem só internal/engine, não engines concretas
+      # engine e dumpio são folhas: não importam nenhum outro pacote do projeto.
+      folhas:
+        files:
+          - "**/internal/engine/**"
+          - "**/internal/dumpio/**"
+        deny:
+          - pkg: db-verify/
+            desc: engine e dumpio não importam outros pacotes do projeto
 
 issues:
   exclude-rules:

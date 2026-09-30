@@ -6,6 +6,7 @@ import (
 	"db-verify/engines/postgres"
 	"db-verify/engines/redis"
 	"db-verify/engines/sqlite"
+	"db-verify/internal/engine"
 )
 
 // Esta é a única lista de engines do binário. A ordem importa:
@@ -25,9 +26,9 @@ var _ = registrarEngines(
 	sqlite.Engine{},
 )
 
-func registrarEngines(engines ...Engine) struct{} {
+func registrarEngines(engines ...engine.Engine) struct{} {
 	for _, e := range engines {
-		Register(e)
+		engine.Register(e)
 	}
 	return struct{}{}
 }

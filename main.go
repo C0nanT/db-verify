@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"db-verify/internal/detect"
 	"db-verify/internal/engine"
 	"db-verify/internal/ui"
 	"errors"
@@ -44,7 +45,7 @@ func main() {
 	flag.Parse()
 
 	if *listEngines {
-		for _, e := range Engines() {
+		for _, e := range engine.Engines() {
 			fmt.Printf("%s\n    %s\n", e.Name(), e.Expects())
 		}
 		return
@@ -58,8 +59,8 @@ func main() {
 	}
 
 	if *engineName != "" {
-		if _, ok := Lookup(*engineName); !ok {
-			fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.StErr.Render("✗"), unknownEngineErr(*engineName))
+		if _, ok := engine.Lookup(*engineName); !ok {
+			fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.StErr.Render("✗"), detect.UnknownEngineErr(*engineName))
 			os.Exit(1)
 		}
 	}
@@ -123,7 +124,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 	// duas vezes nem nenhuma.
 	var (
 		mu   sync.Mutex
-		live Session
+		live engine.Session
 	)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
@@ -152,14 +153,14 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 		return err
 	}
 
-	backup, err := InspectDumpAs(abs, engineName)
+	backup, err := detect.InspectDumpAs(abs, engineName)
 	if err != nil {
 		return err
 	}
 	if backup.Guessed {
 		fmt.Fprintf(os.Stderr, "%s não foi possível identificar o formato do arquivo com confiança; presumindo %s. Use --engine para forçar outra.\n", ui.StWarn.Render("!"), backup.Engine)
 	}
-	eng, ok := Lookup(backup.Engine)
+	eng, ok := engine.Lookup(backup.Engine)
 	if !ok {
 		return fmt.Errorf("engine %q não registrada", backup.Engine)
 	}
@@ -174,7 +175,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 	fmt.Printf("  %s %s (%s)\n", ui.StLabel.Render("versão     :"), ui.OrDash(backup.Version), eng.Name())
 	fmt.Println()
 
-	opts := ProvisionOpts{
+	opts := engine.ProvisionOpts{
 		VersionTag: versionTag, Port: port, Jobs: jobs, DBName: dbName,
 		ExactCounts: exactCounts, Progress: step,
 	}

@@ -3,7 +3,11 @@ package main
 // Detecção do MariaDB contra as fixtures reais em testdata/headers: precisa do
 // conjunto de engines montado na raiz, então não mora em engines/mysql.
 
-import "testing"
+import (
+	"testing"
+
+	"db-verify/internal/detect"
+)
 
 // TestMariaDBDetect_Header caracteriza a detecção pelo cabeçalho de texto do
 // mariadb-dump: magic bytes, versão (preferindo "Server version", caindo
@@ -21,7 +25,7 @@ func TestMariaDBDetect_Header(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			info, err := InspectDump(tc.path)
+			info, err := detect.InspectDump(tc.path)
 			if err != nil {
 				t.Fatalf("InspectDump(%q): %v", tc.path, err)
 			}
@@ -48,7 +52,7 @@ func TestMariaDBDetect_Header(t *testing.T) {
 // cabeçalho é descomprimido antes de a engine olhar para ele, então o
 // mariadb-dump gzipado é reconhecido igual ao plano.
 func TestMariaDBDetect_Gzip(t *testing.T) {
-	info, err := InspectDump("testdata/headers/mariadb.sql.gz")
+	info, err := detect.InspectDump("testdata/headers/mariadb.sql.gz")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}
@@ -68,7 +72,7 @@ func TestMariaDBDetect_Gzip(t *testing.T) {
 // sendo detectado como mysql, não mariadb, mesmo com a engine mariadb
 // registrada.
 func TestMySQLDetect_DumpDeVerdadeContinuaMySQL(t *testing.T) {
-	info, err := InspectDump("testdata/headers/mysql.sql")
+	info, err := detect.InspectDump("testdata/headers/mysql.sql")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}

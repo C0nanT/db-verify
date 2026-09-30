@@ -3,13 +3,17 @@ package main
 // Detecção do SQLite contra as fixtures reais em testdata/headers: precisa do
 // conjunto de engines montado na raiz, então não mora em engines/sqlite.
 
-import "testing"
+import (
+	"testing"
+
+	"db-verify/internal/detect"
+)
 
 // TestSQLiteDetect_Header e TestSQLiteDetect_Gzip caracterizam a detecção
 // via InspectDump usando as fixtures reais em testdata/headers, incluindo
 // comprimida — mesmo padrão das demais engines (ver mysql_detect_test.go).
 func TestSQLiteDetect_Header(t *testing.T) {
-	info, err := InspectDump("testdata/headers/sqlite.db")
+	info, err := detect.InspectDump("testdata/headers/sqlite.db")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}
@@ -22,7 +26,7 @@ func TestSQLiteDetect_Header(t *testing.T) {
 }
 
 func TestSQLiteDetect_Gzip(t *testing.T) {
-	info, err := InspectDump("testdata/headers/sqlite.db.gz")
+	info, err := detect.InspectDump("testdata/headers/sqlite.db.gz")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}

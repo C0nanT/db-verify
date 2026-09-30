@@ -3,12 +3,16 @@ package main
 // Detecção do Redis contra as fixtures reais em testdata/headers: precisa do
 // conjunto de engines montado na raiz, então não mora em engines/redis.
 
-import "testing"
+import (
+	"testing"
+
+	"db-verify/internal/detect"
+)
 
 // TestRedisDetect_Magic caracteriza o reconhecimento pelo magic "REDIS" +
 // versão do formato, usando um dump.rdb real (testdata/headers/redis.rdb).
 func TestRedisDetect_Magic(t *testing.T) {
-	info, err := InspectDump("testdata/headers/redis.rdb")
+	info, err := detect.InspectDump("testdata/headers/redis.rdb")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}
@@ -29,7 +33,7 @@ func TestRedisDetect_Magic(t *testing.T) {
 // TestRedisDetect_Gzip caracteriza a detecção através de gzip: o cabeçalho é
 // descomprimido antes de a engine olhar para ele.
 func TestRedisDetect_Gzip(t *testing.T) {
-	info, err := InspectDump("testdata/headers/redis.rdb.gz")
+	info, err := detect.InspectDump("testdata/headers/redis.rdb.gz")
 	if err != nil {
 		t.Fatalf("InspectDump: %v", err)
 	}

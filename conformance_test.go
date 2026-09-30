@@ -18,6 +18,8 @@ package main
 
 import (
 	"context"
+	"db-verify/internal/detect"
+	"db-verify/internal/engine"
 	"fmt"
 	"os"
 	"os/exec"
@@ -30,7 +32,7 @@ import (
 // TestEngineConformance é o corpo único de conformidade: roda contra toda
 // engine registrada, sem nenhuma ramificação por nome de engine.
 func TestEngineConformance(t *testing.T) {
-	for _, eng := range Engines() {
+	for _, eng := range engine.Engines() {
 		t.Run(eng.Name(), func(t *testing.T) {
 			fx, ok := conformance.Lookup(eng.Name())
 			if !ok {
@@ -51,22 +53,22 @@ func TestEngineConformance(t *testing.T) {
 	}
 }
 
-func conformanceProvisionOpts() ProvisionOpts {
+func conformanceProvisionOpts() engine.ProvisionOpts {
 	// Port 0 = mesmo que omitir --port: cada engine usa a própria janela
 	// (Postgres 55432, MySQL/MariaDB 3306, Redis 6379, Mongo 27017).
-	return ProvisionOpts{Jobs: 4, DBName: "verify", ExactCounts: true}
+	return engine.ProvisionOpts{Jobs: 4, DBName: "verify", ExactCounts: true}
 }
 
 // testConformanceValid provisiona o backup mínimo declarado pela fixture e
 // verifica o contrato inteiro que toda engine precisa cumprir.
-func testConformanceValid(t *testing.T, eng Engine, fx conformance.ConformanceFixture) {
+func testConformanceValid(t *testing.T, eng engine.Engine, fx conformance.ConformanceFixture) {
 	ctx := context.Background()
 	cb := fx.BuildValid(t)
 	if len(cb.WantCollections) == 0 {
 		t.Fatal("fixture: BuildValid não declarou nenhuma coleção esperada em WantCollections")
 	}
 
-	backup, err := InspectDumpAs(cb.Path, eng.Name())
+	backup, err := detect.InspectDumpAs(cb.Path, eng.Name())
 	if err != nil {
 		t.Fatalf("InspectDumpAs: %v", err)
 	}
@@ -113,7 +115,7 @@ func testConformanceValid(t *testing.T, eng Engine, fx conformance.ConformanceFi
 		}
 	})
 
-	var collections []Collection
+	var collections []engine.Collection
 	t.Run("Collections devolve exatamente as coleções esperadas com contagem exata", func(t *testing.T) {
 		var err error
 		collections, err = sess.Collections(ctx, true) // contagem exata
@@ -209,11 +211,11 @@ func testConformanceValid(t *testing.T, eng Engine, fx conformance.ConformanceFi
 
 // testConformanceTruncated prova que erros de restore de um backup
 // deliberadamente truncado são reportados, não engolidos.
-func testConformanceTruncated(t *testing.T, eng Engine, fx conformance.ConformanceFixture) {
+func testConformanceTruncated(t *testing.T, eng engine.Engine, fx conformance.ConformanceFixture) {
 	ctx := context.Background()
 	path := fx.BuildTruncated(t)
 
-	backup, err := InspectDumpAs(path, eng.Name())
+	backup, err := detect.InspectDumpAs(path, eng.Name())
 	if err != nil {
 		t.Fatalf("InspectDumpAs: %v", err)
 	}
@@ -245,9 +247,9 @@ func testConformanceTruncated(t *testing.T, eng Engine, fx conformance.Conforman
 // Provision devolve erro (nunca Session) e não resta container
 // db-verify-<pid>, nem parado. Engines sem container passam trivialmente
 // na segunda checagem, mas não na primeira.
-func testConformanceCancel(t *testing.T, eng Engine, fx conformance.ConformanceFixture) {
+func testConformanceCancel(t *testing.T, eng engine.Engine, fx conformance.ConformanceFixture) {
 	cb := fx.BuildValid(t)
-	backup, err := InspectDumpAs(cb.Path, eng.Name())
+	backup, err := detect.InspectDumpAs(cb.Path, eng.Name())
 	if err != nil {
 		t.Fatalf("InspectDumpAs: %v", err)
 	}

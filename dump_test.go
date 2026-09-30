@@ -6,7 +6,11 @@ package main
 // se algum precisar mudar, ou houve regressão de verdade, ou o teste estava
 // amarrado à forma interna (ver SPEC.md, "Camada 0").
 
-import "testing"
+import (
+	"testing"
+
+	"db-verify/internal/detect"
+)
 
 // TestInspectDump_Formatos cobre a detecção de formato/versão/banco de
 // origem para os três formatos de dump que o Postgres produz hoje: custom
@@ -53,7 +57,7 @@ func TestInspectDump_Formatos(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			info, err := InspectDump(tc.path)
+			info, err := detect.InspectDump(tc.path)
 			if err != nil {
 				t.Fatalf("InspectDump(%q) erro inesperado: %v", tc.path, err)
 			}
@@ -114,7 +118,7 @@ func TestInspectDump_Gzip(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			info, err := InspectDump(tc.path)
+			info, err := detect.InspectDump(tc.path)
 			if err != nil {
 				t.Fatalf("InspectDump(%q) erro inesperado: %v", tc.path, err)
 			}
@@ -138,7 +142,7 @@ func TestInspectDump_Gzip(t *testing.T) {
 // arquivo de tamanho zero: não há erro, e a falta de qualquer assinatura
 // reconhecida cai no palpite padrão do switch em InspectDump ("plain").
 func TestInspectDump_ArquivoVazio(t *testing.T) {
-	info, err := InspectDump("testdata/headers/empty.dump")
+	info, err := detect.InspectDump("testdata/headers/empty.dump")
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
 	}
@@ -158,7 +162,7 @@ func TestInspectDump_ArquivoVazio(t *testing.T) {
 // palpite padrão "plain", sem erro — a "ambiguidade conhecida" descrita na
 // SPEC (um .sql sem cabeçalho reconhecível é atribuído a Postgres).
 func TestInspectDump_TextoAleatorio(t *testing.T) {
-	info, err := InspectDump("testdata/headers/random.txt")
+	info, err := detect.InspectDump("testdata/headers/random.txt")
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
 	}
