@@ -1,12 +1,12 @@
-package main
+package ui
 
 // Testes do picker de data/ (Camada 1): passa a listar todo arquivo
 // reconhecido por alguma engine — não só .dump — com uma coluna mostrando
 // qual engine foi detectada, e arquivos não reconhecidos aparecem marcados
 // como desconhecidos em vez de sumirem da lista.
 //
-// findBackups usa o registro global (só Postgres hoje, que reconhece
-// qualquer coisa por palpite — ver postgres.go), então neste repositório
+// findBackups usa o registro global (aqui, só a fakePostgres, que reconhece
+// qualquer coisa por palpite — ver fake_engine_test.go), então aqui
 // nenhum arquivo real cai em Unknown; o comportamento de "não selecionável"
 // é testado diretamente contra pickerModel com uma entrada Unknown
 // construída à mão, sem depender de uma segunda engine existir.
@@ -25,9 +25,9 @@ import (
 // a engine detectada.
 func TestFindBackups_ListaTodoArquivoReconhecido(t *testing.T) {
 	dir := t.TempDir()
-	copyFixture(t, "testdata/headers/custom.dump", filepath.Join(dir, "a.dump"))
-	copyFixture(t, "testdata/headers/plain.sql", filepath.Join(dir, "b.sql"))
-	copyFixture(t, "testdata/headers/random.txt", filepath.Join(dir, "c.txt"))
+	copyFixture(t, "../../testdata/headers/custom.dump", filepath.Join(dir, "a.dump"))
+	copyFixture(t, "../../testdata/headers/plain.sql", filepath.Join(dir, "b.sql"))
+	copyFixture(t, "../../testdata/headers/random.txt", filepath.Join(dir, "c.txt"))
 
 	backups, err := findBackups(dir)
 	if err != nil {
@@ -50,11 +50,11 @@ func TestFindBackups_ListaTodoArquivoReconhecido(t *testing.T) {
 // diretórios nem dotfiles.
 func TestFindBackups_IgnoraDiretoriosEArquivosOcultos(t *testing.T) {
 	dir := t.TempDir()
-	copyFixture(t, "testdata/headers/plain.sql", filepath.Join(dir, "b.sql"))
+	copyFixture(t, "../../testdata/headers/plain.sql", filepath.Join(dir, "b.sql"))
 	if err := os.Mkdir(filepath.Join(dir, "subdir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	copyFixture(t, "testdata/headers/plain.sql", filepath.Join(dir, ".hidden.sql"))
+	copyFixture(t, "../../testdata/headers/plain.sql", filepath.Join(dir, ".hidden.sql"))
 
 	backups, err := findBackups(dir)
 	if err != nil {

@@ -8,9 +8,9 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seções "Pacotes" e "Orquestração"
 
 **Blocked by:** 05b
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O pacote `ui` importa só `engine` e `detect` dentre os pacotes do projeto.
-- [ ] Os testes do seletor e da TUI moram no pacote `ui`, sem asserção alterada.
-- [ ] `run()` continua no `main`.
-- [ ] `./scripts/check full` passa.
+- [x] O pacote `ui` importa só `engine` e `detect` dentre os pacotes do projeto.
+- [x] Os testes do seletor e da TUI moram no pacote `ui`, sem asserção alterada.
+- [x] `run()` continua no `main`.
+- [x] `./scripts/check full` passa.

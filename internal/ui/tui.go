@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"context"
@@ -21,14 +21,14 @@ var (
 	cDim     = lipgloss.Color("244")
 	cSelBg   = lipgloss.Color("57")
 
-	stTitle  = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
-	stLabel  = lipgloss.NewStyle().Foreground(cDim)
+	StTitle  = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
+	StLabel  = lipgloss.NewStyle().Foreground(cDim)
 	stValue  = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	stOK     = lipgloss.NewStyle().Foreground(cOK).Bold(true)
-	stWarn   = lipgloss.NewStyle().Foreground(cWarn).Bold(true)
-	stErr    = lipgloss.NewStyle().Foreground(cErr).Bold(true)
-	stDim    = lipgloss.NewStyle().Foreground(cDim)
-	stAccent = lipgloss.NewStyle().Foreground(cAccent)
+	StOK     = lipgloss.NewStyle().Foreground(cOK).Bold(true)
+	StWarn   = lipgloss.NewStyle().Foreground(cWarn).Bold(true)
+	StErr    = lipgloss.NewStyle().Foreground(cErr).Bold(true)
+	StDim    = lipgloss.NewStyle().Foreground(cDim)
+	StAccent = lipgloss.NewStyle().Foreground(cAccent)
 	stSel    = lipgloss.NewStyle().Background(cSelBg).Foreground(lipgloss.Color("231")).Bold(true)
 	stColHdr = lipgloss.NewStyle().Foreground(cAccent).Bold(true).Underline(true)
 
@@ -38,8 +38,8 @@ var (
 // ------------------------------------------------------------------ modelo ---
 
 type queryDoneMsg struct {
-	coll Collection
-	res  *ResultSet
+	coll engine.Collection
+	res  *engine.ResultSet
 	err  error
 }
 
@@ -47,21 +47,21 @@ type queryDoneMsg struct {
 // (Backup, Health, Collection, ResultSet). Nenhuma referência a Postgres,
 // pgx, SQL ou "schema.tabela" vive aqui.
 type model struct {
-	sess           Session
-	backup         *Backup
-	hint           ConnectHint
-	restore        *RestoreResult
-	health         *Health
-	allCollections []Collection
+	sess           engine.Session
+	backup         *engine.Backup
+	hint           engine.ConnectHint
+	restore        *engine.RestoreResult
+	health         *engine.Health
+	allCollections []engine.Collection
 
-	collections []Collection // após filtro
+	collections []engine.Collection // após filtro
 	cursor      int
 	offset      int
 	filter      string
 	filtOn      bool
 	loading     bool
 
-	res     *ResultSet
+	res     *engine.ResultSet
 	resFor  string
 	resErr  error
 	hscroll int
@@ -93,7 +93,7 @@ func (m *model) listW() int {
 	return w
 }
 
-func newModel(sess Session, backup *Backup, health *Health, collections []Collection) *model {
+func NewModel(sess engine.Session, backup *engine.Backup, health *engine.Health, collections []engine.Collection) *model {
 	m := &model{
 		sess: sess, backup: backup, hint: sess.ConnectHint(), restore: sess.Restore(), health: health,
 		allCollections: collections, collections: collections, width: 100, height: 30,
@@ -356,31 +356,31 @@ func (m *model) View() string {
 }
 
 func (m *model) viewHeader() string {
-	status := stOK.Render("✓ restore sem erros")
+	status := StOK.Render("✓ restore sem erros")
 	if m.restore != nil && len(m.restore.Errors) > 0 {
-		status = stWarn.Render(fmt.Sprintf("! %d erro(s) no restore", len(m.restore.Errors)))
+		status = StWarn.Render(fmt.Sprintf("! %d erro(s) no restore", len(m.restore.Errors)))
 	}
 	origin := m.backup.OriginDB
 	if origin == "" {
 		origin = "?"
 	}
 	l1 := fmt.Sprintf("%s  %s  %s",
-		stTitle.Render("Verify Backup"),
-		stDim.Render("·"),
+		StTitle.Render("Verify Backup"),
+		StDim.Render("·"),
 		stValue.Render(shortPath(m.backup.Path, m.width-24)))
 	l2 := fmt.Sprintf("%s %s   %s %s   %s %s   %s %s   %s",
-		stLabel.Render("origem:"), stValue.Render(origin),
-		stLabel.Render("engine:"), stValue.Render(m.backup.Engine+" "+orDash(m.backup.Version)),
-		stLabel.Render("formato:"), stValue.Render(m.backup.Format),
-		stLabel.Render("backup:"), stValue.Render(engine.HumanSize(m.backup.Size)),
+		StLabel.Render("origem:"), stValue.Render(origin),
+		StLabel.Render("engine:"), stValue.Render(m.backup.Engine+" "+OrDash(m.backup.Version)),
+		StLabel.Render("formato:"), stValue.Render(m.backup.Format),
+		StLabel.Render("backup:"), stValue.Render(engine.HumanSize(m.backup.Size)),
 		status)
 
-	fields := []string{fmt.Sprintf("%s %s", stLabel.Render("tamanho:"), stValue.Render(m.health.Size))}
+	fields := []string{fmt.Sprintf("%s %s", StLabel.Render("tamanho:"), stValue.Render(m.health.Size))}
 	for _, f := range m.health.Fields {
-		fields = append(fields, fmt.Sprintf("%s %s", stLabel.Render(f.Label+":"), stValue.Render(f.Value)))
+		fields = append(fields, fmt.Sprintf("%s %s", StLabel.Render(f.Label+":"), stValue.Render(f.Value)))
 	}
 	if m.hint.Port != 0 {
-		fields = append(fields, fmt.Sprintf("%s %s", stLabel.Render("porta:"), stAccent.Render(fmt.Sprint(m.hint.Port))))
+		fields = append(fields, fmt.Sprintf("%s %s", StLabel.Render("porta:"), StAccent.Render(fmt.Sprint(m.hint.Port))))
 	}
 	l3 := strings.Join(fields, "   ")
 
@@ -402,7 +402,7 @@ func (m *model) viewList() string {
 		case i == m.cursor:
 			row = stSel.Render(row)
 		case c.Count == 0:
-			row = stDim.Render(row)
+			row = StDim.Render(row)
 		}
 		lines = append(lines, row)
 	}
@@ -410,9 +410,9 @@ func (m *model) viewList() string {
 		lines = append(lines, "")
 	}
 	if m.filtOn || m.filter != "" {
-		lines = append(lines, stAccent.Render("/"+m.filter+"▌"))
+		lines = append(lines, StAccent.Render("/"+m.filter+"▌"))
 	} else {
-		lines = append(lines, stDim.Render(fmt.Sprintf("%d tabelas", len(m.collections))))
+		lines = append(lines, StDim.Render(fmt.Sprintf("%d tabelas", len(m.collections))))
 	}
 	return stBox.Width(m.listW() - 2).Height(m.bodyHeight() - 2).Render(strings.Join(lines, "\n"))
 }
@@ -422,27 +422,27 @@ func (m *model) viewResult() string {
 	h := m.bodyHeight() - 2
 
 	if len(m.collections) == 0 {
-		return stBox.Width(w - 2).Height(h).Render(stDim.Render("nenhuma tabela"))
+		return stBox.Width(w - 2).Height(h).Render(StDim.Render("nenhuma tabela"))
 	}
 	c := m.collections[m.cursor]
 
-	head := stTitle.Render("20 mais recentes · " + c.Qualified())
-	hint := stDim.Render(c.Hint)
+	head := StTitle.Render("20 mais recentes · " + c.Qualified())
+	hint := StDim.Render(c.Hint)
 
 	queryText := c.Preview
 	if m.res != nil && m.resFor == c.Qualified() {
 		queryText = m.res.Query
 	}
-	queryLine := stAccent.Render(truncate(queryText, w-4))
+	queryLine := StAccent.Render(truncate(queryText, w-4))
 
 	var bodyLines []string
 	switch {
 	case m.loading:
-		bodyLines = []string{stDim.Render("consultando…")}
+		bodyLines = []string{StDim.Render("consultando…")}
 	case m.resErr != nil:
-		bodyLines = []string{stErr.Render("erro: " + m.resErr.Error())}
+		bodyLines = []string{StErr.Render("erro: " + m.resErr.Error())}
 	case m.res == nil || len(m.res.Rows) == 0:
-		bodyLines = []string{stWarn.Render("tabela vazia — nenhum registro")}
+		bodyLines = []string{StWarn.Render("tabela vazia — nenhum registro")}
 	default:
 		bodyLines = renderTable(m.res, m.tableViewW(), h-4, m.hscroll, m.wide)
 	}
@@ -456,7 +456,7 @@ func (m *model) viewFooter() string {
 		expand = "e compactar colunas"
 	}
 	keys := []string{"↑/↓ navegar", "clique/enter consultar", "←/→ rolar (shift: tela)", expand, "tab ocultar lista", "/ filtrar", "r recarregar", "q sair"}
-	return stDim.Render("  " + strings.Join(keys, "  ·  "))
+	return StDim.Render("  " + strings.Join(keys, "  ·  "))
 }
 
 // maxCol: largura máxima de uma coluna no modo compacto (fora do modo expandido).
@@ -469,7 +469,7 @@ const colSep = " │ "
 var cellText = strings.NewReplacer("\r\n", "⏎", "\n", "⏎", "\r", "⏎", "\t", " ").Replace
 
 // colWidths calcula a largura de cada coluna; wide=false limita cada uma a maxCol.
-func colWidths(rs *ResultSet, wide bool) []int {
+func colWidths(rs *engine.ResultSet, wide bool) []int {
 	widths := make([]int, len(rs.Columns))
 	for i, c := range rs.Columns {
 		widths[i] = len([]rune(c))
@@ -505,7 +505,7 @@ func tableWidth(widths []int) int {
 
 // renderTable desenha o resultset em colunas alinhadas, com scroll horizontal.
 // wide=true não trunca células: o conteúdo inteiro fica acessível via hscroll.
-func renderTable(rs *ResultSet, width, maxRows, hscroll int, wide bool) []string {
+func renderTable(rs *engine.ResultSet, width, maxRows, hscroll int, wide bool) []string {
 	widths := colWidths(rs, wide)
 
 	build := func(cells []string) string {
@@ -527,11 +527,11 @@ func renderTable(rs *ResultSet, width, maxRows, hscroll int, wide bool) []string
 
 	out := []string{
 		stColHdr.Render(slice(header, hscroll, width)),
-		stDim.Render(slice(sep, hscroll, width)),
+		StDim.Render(slice(sep, hscroll, width)),
 	}
 	for i, row := range rs.Rows {
 		if i >= maxRows-3 {
-			out = append(out, stDim.Render(fmt.Sprintf("… +%d linhas (janela pequena)", len(rs.Rows)-i)))
+			out = append(out, StDim.Render(fmt.Sprintf("… +%d linhas (janela pequena)", len(rs.Rows)-i)))
 			break
 		}
 		out = append(out, slice(build(row), hscroll, width))
@@ -540,7 +540,7 @@ func renderTable(rs *ResultSet, width, maxRows, hscroll int, wide bool) []string
 	if total := tableWidth(widths); total > width {
 		status += fmt.Sprintf("  ·  colunas %d–%d de %d", hscroll+1, min(hscroll+width, total), total)
 	}
-	out = append(out, "", stDim.Render(status))
+	out = append(out, "", StDim.Render(status))
 	return out
 }
 
@@ -592,4 +592,13 @@ func shortPath(p string, w int) string {
 		return p
 	}
 	return "…" + p[len(p)-w+1:]
+}
+
+// OrDash devolve "desconhecida" quando s é vazio; o main também a usa no
+// resumo impresso antes da TUI.
+func OrDash(s string) string {
+	if s == "" {
+		return "desconhecida"
+	}
+	return s
 }

@@ -1,7 +1,7 @@
 package main
 
-// Helpers pequenos compartilhados pelas engines e pela interface que ainda
-// moram na raiz.
+// Helpers pequenos compartilhados pelo main e pelas engines que ainda moram
+// na raiz.
 
 import "strings"
 
@@ -24,4 +24,20 @@ func printableStrings(b []byte) []string {
 	}
 	flush()
 	return out
+}
+
+// truncate corta s em w runas, terminando em "…" quando precisa cortar. Há
+// uma cópia privada em internal/ui: o ui não pode ser importado pelas engines.
+func truncate(s string, w int) string {
+	r := []rune(s)
+	if w <= 0 {
+		return ""
+	}
+	if len(r) <= w {
+		return s
+	}
+	if w == 1 {
+		return "…"
+	}
+	return string(r[:w-1]) + "…"
 }

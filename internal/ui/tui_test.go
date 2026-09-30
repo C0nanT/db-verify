@@ -1,13 +1,14 @@
-package main
+package ui
 
 import (
+	"db-verify/internal/engine"
 	"strings"
 	"testing"
 )
 
-func longResult() *ResultSet {
+func longResult() *engine.ResultSet {
 	long := strings.Repeat("x", 100) + "FIM"
-	return &ResultSet{
+	return &engine.ResultSet{
 		Columns: []string{"id", "payload"},
 		Rows:    [][]string{{"1", long}, {"2", "curto"}},
 	}
@@ -40,7 +41,7 @@ func TestRenderTableWideRevealsEnd(t *testing.T) {
 
 // Quebras de linha dentro da célula não podem quebrar a linha da tabela.
 func TestRenderTableFlattensNewlines(t *testing.T) {
-	rs := &ResultSet{Columns: []string{"txt"}, Rows: [][]string{{"a\nb\r\nc\td"}}}
+	rs := &engine.ResultSet{Columns: []string{"txt"}, Rows: [][]string{{"a\nb\r\nc\td"}}}
 	row := renderTable(rs, 80, 20, 0, true)[2]
 	if strings.ContainsAny(row, "\r\n\t") || !strings.Contains(row, "a⏎b⏎c d") {
 		t.Fatalf("célula não achatada: %q", row)

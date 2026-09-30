@@ -1,6 +1,7 @@
-package main
+package ui
 
 import (
+	"db-verify/internal/detect"
 	"db-verify/internal/engine"
 	"fmt"
 	"os"
@@ -49,7 +50,7 @@ func findBackups(dir string) ([]backupEntry, error) {
 			Size:    info.Size(),
 			ModTime: info.ModTime().Format("2006-01-02 15:04"),
 		}
-		if backup, err := InspectDump(path); err == nil {
+		if backup, err := detect.InspectDump(path); err == nil {
 			be.Engine = backup.Engine
 		} else {
 			be.Unknown = true
@@ -111,9 +112,9 @@ func (m *pickerModel) View() string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(stTitle.Render("Verify Backup"))
+	b.WriteString(StTitle.Render("Verify Backup"))
 	b.WriteString("\n")
-	b.WriteString(stDim.Render("selecione um backup em data/ · ↑/↓ navega · enter confirma · q sai"))
+	b.WriteString(StDim.Render("selecione um backup em data/ · ↑/↓ navega · enter confirma · q sai"))
 	b.WriteString("\n\n")
 
 	nameW, engineW := 0, len("engine")
@@ -128,13 +129,13 @@ func (m *pickerModel) View() string {
 	for i, d := range m.backups {
 		label := d.engineLabel()
 		if d.Unknown {
-			label = stDim.Render(fmt.Sprintf("%-*s", engineW, label))
+			label = StDim.Render(fmt.Sprintf("%-*s", engineW, label))
 		} else {
-			label = stAccent.Render(fmt.Sprintf("%-*s", engineW, label))
+			label = StAccent.Render(fmt.Sprintf("%-*s", engineW, label))
 		}
 		row := fmt.Sprintf("%-*s  %s  %8s  %s", nameW, d.Name, label, engine.HumanSize(d.Size), d.ModTime)
 		if d.Unknown {
-			row = stDim.Render("  " + row)
+			row = StDim.Render("  " + row)
 		} else if i == m.cursor {
 			row = stSel.Render("▸ " + row)
 		} else {
@@ -154,10 +155,10 @@ func (d backupEntry) engineLabel() string {
 	return d.Engine
 }
 
-// pickDump lista os arquivos reconhecidos em dataDir e pede ao usuário para
+// PickDump lista os arquivos reconhecidos em dataDir e pede ao usuário para
 // escolher um. Se houver exatamente um arquivo, ainda assim exibe a seleção
 // para confirmação.
-func pickDump(dataDir string) (string, error) {
+func PickDump(dataDir string) (string, error) {
 	backups, err := findBackups(dataDir)
 	if err != nil {
 		return "", fmt.Errorf("não foi possível ler %s: %w", dataDir, err)

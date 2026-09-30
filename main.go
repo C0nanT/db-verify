@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"db-verify/internal/engine"
+	"db-verify/internal/ui"
 	"errors"
 	"flag"
 	"fmt"
@@ -50,7 +51,7 @@ func main() {
 	}
 
 	if *pgVersion != "" {
-		fmt.Fprintf(os.Stderr, "%s --pg está depreciado, use --version-tag\n", stWarn.Render("!"))
+		fmt.Fprintf(os.Stderr, "%s --pg está depreciado, use --version-tag\n", ui.StWarn.Render("!"))
 		if *versionTag == "" {
 			*versionTag = *pgVersion
 		}
@@ -58,7 +59,7 @@ func main() {
 
 	if *engineName != "" {
 		if _, ok := Lookup(*engineName); !ok {
-			fmt.Fprintf(os.Stderr, "\n%s %v\n", stErr.Render("✗"), unknownEngineErr(*engineName))
+			fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.StErr.Render("✗"), unknownEngineErr(*engineName))
 			os.Exit(1)
 		}
 	}
@@ -68,12 +69,12 @@ func main() {
 	case 0:
 		dataDir, err := defaultDataDir()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\n%s %v\n", stErr.Render("✗"), err)
+			fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.StErr.Render("✗"), err)
 			os.Exit(1)
 		}
-		dumpPath, err = pickDump(dataDir)
+		dumpPath, err = ui.PickDump(dataDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\n%s %v\n", stErr.Render("✗"), err)
+			fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.StErr.Render("✗"), err)
 			os.Exit(1)
 		}
 	case 1:
@@ -84,10 +85,10 @@ func main() {
 	}
 	if err := run(dumpPath, *versionTag, *engineName, *port, *jobs, *dbName, *keep, !*noCounts); err != nil {
 		if errors.Is(err, errInterrupted) {
-			fmt.Fprintf(os.Stderr, "\n%s interrompido\n", stWarn.Render("!"))
+			fmt.Fprintf(os.Stderr, "\n%s interrompido\n", ui.StWarn.Render("!"))
 			os.Exit(130)
 		}
-		fmt.Fprintf(os.Stderr, "\n%s %v\n", stErr.Render("✗"), err)
+		fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.StErr.Render("✗"), err)
 		os.Exit(1)
 	}
 }
@@ -107,7 +108,7 @@ func interruptedErr(ctx context.Context, err error) error {
 }
 
 func step(format string, a ...any) {
-	fmt.Printf("%s %s\n", stAccent.Render("==>"), fmt.Sprintf(format, a...))
+	fmt.Printf("%s %s\n", ui.StAccent.Render("==>"), fmt.Sprintf(format, a...))
 }
 
 func run(path, versionTag, engineName string, port, jobs int, dbName string, keep, exactCounts bool) error {
@@ -156,7 +157,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 		return err
 	}
 	if backup.Guessed {
-		fmt.Fprintf(os.Stderr, "%s não foi possível identificar o formato do arquivo com confiança; presumindo %s. Use --engine para forçar outra.\n", stWarn.Render("!"), backup.Engine)
+		fmt.Fprintf(os.Stderr, "%s não foi possível identificar o formato do arquivo com confiança; presumindo %s. Use --engine para forçar outra.\n", ui.StWarn.Render("!"), backup.Engine)
 	}
 	eng, ok := Lookup(backup.Engine)
 	if !ok {
@@ -164,13 +165,13 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 	}
 
 	fmt.Println()
-	fmt.Println(stTitle.Render("Verify Backup"))
-	fmt.Printf("  %s %s (%s)\n", stLabel.Render("arquivo    :"), abs, engine.HumanSize(backup.Size))
-	fmt.Printf("  %s %s / compressão %s\n", stLabel.Render("formato    :"), backup.Format, backup.Compression)
+	fmt.Println(ui.StTitle.Render("Verify Backup"))
+	fmt.Printf("  %s %s (%s)\n", ui.StLabel.Render("arquivo    :"), abs, engine.HumanSize(backup.Size))
+	fmt.Printf("  %s %s / compressão %s\n", ui.StLabel.Render("formato    :"), backup.Format, backup.Compression)
 	if backup.OriginDB != "" {
-		fmt.Printf("  %s %s\n", stLabel.Render("banco orig.:"), backup.OriginDB)
+		fmt.Printf("  %s %s\n", ui.StLabel.Render("banco orig.:"), backup.OriginDB)
 	}
-	fmt.Printf("  %s %s (%s)\n", stLabel.Render("versão     :"), orDash(backup.Version), eng.Name())
+	fmt.Printf("  %s %s (%s)\n", ui.StLabel.Render("versão     :"), ui.OrDash(backup.Version), eng.Name())
 	fmt.Println()
 
 	opts := ProvisionOpts{
@@ -192,7 +193,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 			if label == "" {
 				label = hint.DSN
 			}
-			fmt.Printf("\n%s sessão mantida: %s\n", stAccent.Render("==>"), label)
+			fmt.Printf("\n%s sessão mantida: %s\n", ui.StAccent.Render("==>"), label)
 			if hint.ExecShell != "" {
 				fmt.Printf("    shell:  %s\n", hint.ExecShell)
 			}
@@ -216,18 +217,18 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 
 	if res := sess.Restore(); res != nil {
 		if len(res.Errors) == 0 {
-			fmt.Printf("%s restore concluído sem erros em %s\n", stOK.Render("✓"), res.Duration.Round(time.Millisecond))
+			fmt.Printf("%s restore concluído sem erros em %s\n", ui.StOK.Render("✓"), res.Duration.Round(time.Millisecond))
 		} else {
-			fmt.Printf("%s restore com %d erro(s) em %s\n", stWarn.Render("!"), len(res.Errors), res.Duration.Round(time.Millisecond))
+			fmt.Printf("%s restore com %d erro(s) em %s\n", ui.StWarn.Render("!"), len(res.Errors), res.Duration.Round(time.Millisecond))
 			for i, e := range res.Errors {
 				if i == 5 {
-					fmt.Printf("    %s\n", stDim.Render(fmt.Sprintf("… mais %d", len(res.Errors)-5)))
+					fmt.Printf("    %s\n", ui.StDim.Render(fmt.Sprintf("… mais %d", len(res.Errors)-5)))
 					break
 				}
 				fmt.Printf("    %s\n", truncate(e, 110))
 			}
 			if res.LogPath != "" {
-				fmt.Printf("    %s\n", stDim.Render("log: "+res.LogPath))
+				fmt.Printf("    %s\n", ui.StDim.Render("log: "+res.LogPath))
 			}
 		}
 	}
@@ -246,7 +247,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 	}
 
 	p := tea.NewProgram(
-		newModel(sess, backup, health, collections),
+		ui.NewModel(sess, backup, health, collections),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -255,7 +256,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 	}
 
 	hint := sess.ConnectHint()
-	fmt.Printf("\n%s conexão para reusar:\n  %s\n", stAccent.Render("==>"), hint.Shell)
+	fmt.Printf("\n%s conexão para reusar:\n  %s\n", ui.StAccent.Render("==>"), hint.Shell)
 	return nil
 }
 
@@ -270,11 +271,4 @@ func defaultDataDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(filepath.Dir(exe), "data"), nil
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "desconhecida"
-	}
-	return s
 }
