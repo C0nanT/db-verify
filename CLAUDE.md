@@ -65,7 +65,7 @@ Everything funnels through one interface pair:
 - `Session` — the live connection to a restored backup: `Health`, `Collections`,
   `Recent`, `Query`, `ConnectHint`, `Restore`, `Close`.
 
-Each engine lives in its own file (`postgres.go`, `engines/mysql/` (MySQL + MariaDB), `engines/sqlite/`,
+Each engine lives in its own file (`engines/postgres/`, `engines/mysql/` (MySQL + MariaDB), `engines/sqlite/`,
 `engines/redis/`, `engines/mongo/`) implementing both interfaces against Docker + that engine's
 driver/CLI, and self-registers via `func init() { Register(xEngine{}) }`. Callers
 (`main.go`, `picker.go`, `tui.go`, `detect.go`) only ever depend on `Engine`/`Session`
@@ -96,8 +96,8 @@ follow-up, unless `--keep` was passed.
 
 - Plain `*_test.go` (no build tag): detection, per-engine heuristics, anything that
   doesn't require a live container. Runs anywhere, no Docker needed.
-- `//go:build docker` files (`conformance_test.go`, `docker_test.go`,
-  `*_conformance_test.go`): require Docker. `conformance_test.go` is a single generic
+- `//go:build docker` files (`conformance_test.go`, `engines/postgres/docker_test.go`,
+  `engines/*/*conformance.go`): require Docker. `conformance_test.go` is a single generic
   test body parameterized over `Engines()` — no branching per engine name. Each engine
   registers a `conformance.ConformanceFixture` (via `conformance.Register` from
   `internal/conformance`, docker-tagged, in its own `init()`) describing how to build
@@ -126,7 +126,7 @@ When applying a principle would require reshaping modules outside the current fl
 ### In this repo
 
 - **Policy** — `engine.go` (the `Engine`/`Session` interfaces, `Match`/`Backup`/`Collection`/`Health` types, the engine registry) and `relational.go` (heuristics shared by relational engines).
-- **Details** — the per-engine files (`postgres.go`, `engines/mysql/` (MySQL + MariaDB), `engines/mongo/`, `engines/redis/`, `engines/sqlite/`), each implementing `Engine`/`Session` against Docker and a specific DB driver/CLI.
+- **Details** — the per-engine files (`engines/postgres/`, `engines/mysql/` (MySQL + MariaDB), `engines/mongo/`, `engines/redis/`, `engines/sqlite/`), each implementing `Engine`/`Session` against Docker and a specific DB driver/CLI.
 - **Wiring** — each engine file self-registers via `func init() { Register(xEngine{}) }`; callers (`main.go`, `picker.go`, `tui.go`, `detect.go`) depend only on the `Engine`/`Session` interfaces from `engine.go` and the `Engines()`/`Lookup()` registry, never on concrete engine types.
 - **Test substitution** — tests implement `Engine`/`Session` with fakes (e.g. `fakeEngine` in `detect_test.go`) instead of standing up a real container.
 

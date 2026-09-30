@@ -1,8 +1,8 @@
 //go:build docker
 
-package main
+package postgres
 
-// Fixture de conformidade da engine Postgres (ver conformance_test.go): como
+// Fixture de conformidade da engine Postgres (ver conformance_test.go, na raiz): como
 // gerar o backup mínimo válido e o backup truncado que TestEngineConformance
 // exige de toda engine registrada.
 
@@ -44,6 +44,32 @@ INSERT INTO com_dados (created_at)
   SELECT timestamp '2024-01-01' + (g * interval '1 hour')
   FROM generate_series(1, 25) AS g;
 `
+
+// waitDockerPostgres espera o banco de origem existir de verdade. pg_isready
+// sozinho aceita o servidor temporário da imagem oficial (antes de srcdb e
+// do restart) — o psql em seguida falha com "database does not exist" ou
+// "system is shutting down". Duas consultas SELECT 1 seguidas, mesmo padrão
+// de pgContainer.WaitReady.
+func waitDockerPostgres(t *testing.T, name, user, db string, timeout time.Duration) {
+	t.Helper()
+	check := func() bool {
+		return exec.Command("docker", "exec", name,
+			"psql", "-U", user, "-d", db, "-c", "SELECT 1").Run() == nil
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if check() {
+			time.Sleep(300 * time.Millisecond)
+			if check() {
+				return
+			}
+			continue
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	logs, _ := exec.Command("docker", "logs", "--tail", "20", name).CombinedOutput()
+	t.Fatalf("timeout esperando o Postgres de origem ficar pronto:\n%s", logs)
+}
 
 // pgConformanceSourceDump sobe um Postgres "de origem" descartável, aplica
 // pgConformanceSchemaSQL e devolve o caminho de um dump em formato custom

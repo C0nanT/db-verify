@@ -7,7 +7,7 @@ package redis
 // exige de toda engine registrada.
 //
 // O "backup mínimo com duas coleções, uma vazia" que as fixtures relacionais
-// seguem (postgres_conformance_test.go, na raiz, e engines/mysql/mysql_conformance.go) não
+// seguem (engines/postgres/conformance.go e engines/mysql/mysql_conformance.go) não
 // traduz para o Redis: uma "coleção" aqui é um grupo de chaves inferido por
 // prefixo (ticket 07), e um prefixo sem nenhuma chave simplesmente não
 // existe — SCAN não tem como descobri-lo. Em vez de forçar uma coleção

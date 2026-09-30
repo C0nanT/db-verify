@@ -1,4 +1,4 @@
-package main
+package postgres
 
 // Implementação da engine PostgreSQL atrás da interface Engine/Session. Toda
 // a variação específica de Postgres (pgx, information_schema, "schema.tabela",
@@ -8,7 +8,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"db-verify/internal/dumpio"
 	"fmt"
 	"io"
 	"os"
@@ -20,12 +19,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"db-verify/internal/docker"
+	"db-verify/internal/dumpio"
+	"db-verify/internal/engine"
+	"db-verify/internal/relational"
 )
 
-// pgEngine implementa Engine para PostgreSQL.
-type pgEngine struct{}
+// Engine implementa engine.Engine para PostgreSQL.
+type Engine struct{}
 
-func (pgEngine) Name() string { return "postgres" }
+func (Engine) Name() string { return "postgres" }
 
 var (
 	reHeaderVersion = regexp.MustCompile(`^(\d{1,2})\.\d+`)
@@ -38,10 +40,10 @@ var (
 // (plain), ".tar" por extensão, e um palpite de "plain" para qualquer outra
 // coisa — a ambiguidade conhecida e aceita (ver SPEC.md, "Ambiguidade
 // conhecida e resolvida por decisão").
-func (pgEngine) Detect(head []byte, path string) (Match, bool) {
+func (Engine) Detect(head []byte, path string) (engine.Match, bool) {
 	switch {
 	case bytes.HasPrefix(head, []byte("PGDMP")):
-		m := Match{Format: "custom", Confidence: ConfidenceMagic}
+		m := engine.Match{Format: "custom", Confidence: engine.ConfidenceMagic}
 		parts := printableStrings(head[:min(512, len(head))])
 		if len(parts) > 1 {
 			m.OriginDB = parts[1]
@@ -54,7 +56,7 @@ func (pgEngine) Detect(head []byte, path string) (Match, bool) {
 		}
 		return m, true
 	case bytes.Contains(head, []byte("PostgreSQL database dump")):
-		m := Match{Format: "plain", Confidence: ConfidenceMagic}
+		m := engine.Match{Format: "plain", Confidence: engine.ConfidenceMagic}
 		if mm := rePlainVersion.FindSubmatch(head); mm != nil {
 			m.Version = string(mm[1])
 		}
@@ -63,15 +65,15 @@ func (pgEngine) Detect(head []byte, path string) (Match, bool) {
 		}
 		return m, true
 	case strings.HasSuffix(strings.ToLower(path), ".tar"):
-		return Match{Format: "tar", Confidence: ConfidenceExtension}, true
+		return engine.Match{Format: "tar", Confidence: engine.ConfidenceExtension}, true
 	default:
-		return Match{Format: "plain", Confidence: ConfidenceGuess}, true // palpite: SQL puro
+		return engine.Match{Format: "plain", Confidence: engine.ConfidenceGuess}, true // palpite: SQL puro
 	}
 }
 
 // Expects descreve o que o Postgres reconhece, para mensagens de erro e
 // --list-engines.
-func (pgEngine) Expects() string {
+func (Engine) Expects() string {
 	return "dumps do pg_dump: magic \"PGDMP\" (custom), cabeçalho \"PostgreSQL database dump\" (plain), ou extensão .tar/.sql"
 }
 
@@ -79,7 +81,7 @@ func (pgEngine) Expects() string {
 // conecta — deliberadamente grosso, para o número de seams continuar sendo
 // um. opts.Progress, se houver, é chamado a cada fase para o chamador
 // imprimir o mesmo acompanhamento de sempre.
-func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
+func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
@@ -237,7 +239,7 @@ func (c *pgContainer) WaitReady(ctx context.Context, timeout time.Duration) erro
 }
 
 // CopyDump joga o arquivo dentro do container, descomprimindo se preciso.
-func (c *pgContainer) CopyDump(ctx context.Context, b *Backup) error {
+func (c *pgContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 	if b.Compression == "none" {
 		out, err := exec.CommandContext(ctx, "docker", "cp", b.Path, c.Name+":/tmp/backup.dump").CombinedOutput()
 		if err != nil {
@@ -269,7 +271,7 @@ func (c *pgContainer) CopyDump(ctx context.Context, b *Backup) error {
 
 var reRestoreErr = regexp.MustCompile(`(?im)^(pg_restore: )?(error|erro):|^ERROR:`)
 
-func (c *pgContainer) Restore(ctx context.Context, b *Backup, jobs int) (*RestoreResult, error) {
+func (c *pgContainer) Restore(ctx context.Context, b *engine.Backup, jobs int) (*engine.RestoreResult, error) {
 	start := time.Now()
 	var args []string
 	if b.Format == "plain" {
@@ -281,7 +283,7 @@ func (c *pgContainer) Restore(ctx context.Context, b *Backup, jobs int) (*Restor
 	}
 	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
 
-	res := &RestoreResult{Duration: time.Since(start)}
+	res := &engine.RestoreResult{Duration: time.Since(start)}
 	if ee, ok := err.(*exec.ExitError); ok {
 		res.ExitCode = ee.ExitCode()
 	} else if err != nil {
@@ -338,9 +340,9 @@ var tablesSQL = `
 WITH cols AS (
   SELECT c.table_schema, c.table_name, c.column_name, c.ordinal_position,
          CASE
-           WHEN c.column_name IN (` + sqlStringList(orderColumnTiers[0]) + `) THEN 1
-           WHEN c.column_name IN (` + sqlStringList(orderColumnTiers[1]) + `) THEN 2
-           WHEN c.column_name IN (` + sqlStringList(orderColumnTiers[2]) + `) THEN 3
+           WHEN c.column_name IN (` + relational.SQLStringList(relational.OrderColumnTiers[0]) + `) THEN 1
+           WHEN c.column_name IN (` + relational.SQLStringList(relational.OrderColumnTiers[1]) + `) THEN 2
+           WHEN c.column_name IN (` + relational.SQLStringList(relational.OrderColumnTiers[2]) + `) THEN 3
            WHEN c.data_type IN ('timestamp with time zone','timestamp without time zone','date') THEN 4
            ELSE 9
          END AS pref
@@ -400,10 +402,10 @@ func pgRecentQuery(namespace, name string, d pgDescriptor) string {
 type pgSession struct {
 	pool    *pgxpool.Pool
 	cont    *pgContainer
-	restore *RestoreResult
+	restore *engine.RestoreResult
 }
 
-func (s *pgSession) Health(ctx context.Context) (*Health, error) {
+func (s *pgSession) Health(ctx context.Context) (*engine.Health, error) {
 	var name, size string
 	var tables, views, indexes, funcs, fks int
 	err := s.pool.QueryRow(ctx, healthSQL).Scan(&name, &size, &tables,
@@ -411,10 +413,10 @@ func (s *pgSession) Health(ctx context.Context) (*Health, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Health{
+	return &engine.Health{
 		Name: name,
 		Size: size,
-		Fields: []HealthField{
+		Fields: []engine.HealthField{
 			{Label: "tabelas", Value: fmt.Sprint(tables)},
 			{Label: "views", Value: fmt.Sprint(views)},
 			{Label: "índices", Value: fmt.Sprint(indexes)},
@@ -424,14 +426,14 @@ func (s *pgSession) Health(ctx context.Context) (*Health, error) {
 	}, nil
 }
 
-func (s *pgSession) Collections(ctx context.Context, exact bool) ([]Collection, error) {
+func (s *pgSession) Collections(ctx context.Context, exact bool) ([]engine.Collection, error) {
 	rows, err := s.pool.Query(ctx, tablesSQL, exact)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []Collection
+	var out []engine.Collection
 	for rows.Next() {
 		var schema, name, size, orderCol string
 		var count int64
@@ -439,13 +441,13 @@ func (s *pgSession) Collections(ctx context.Context, exact bool) ([]Collection, 
 		if err := rows.Scan(&schema, &name, &count, &size, &orderCol, &byDate); err != nil {
 			return nil, err
 		}
-		hint := orderHint(orderCol, byDate)
+		hint := relational.OrderHint(orderCol, byDate)
 		namespace := schema
 		if namespace == "public" {
 			namespace = ""
 		}
 		d := pgDescriptor{OrderCol: orderCol, ByDate: byDate}
-		out = append(out, Collection{
+		out = append(out, engine.Collection{
 			Namespace:  namespace,
 			Name:       name,
 			Count:      count,
@@ -458,7 +460,7 @@ func (s *pgSession) Collections(ctx context.Context, exact bool) ([]Collection, 
 	return out, rows.Err()
 }
 
-func (s *pgSession) Recent(ctx context.Context, c Collection) (*ResultSet, error) {
+func (s *pgSession) Recent(ctx context.Context, c engine.Collection) (*engine.ResultSet, error) {
 	d, _ := c.Descriptor.(pgDescriptor)
 	schema := c.Namespace
 	if schema == "" {
@@ -467,11 +469,11 @@ func (s *pgSession) Recent(ctx context.Context, c Collection) (*ResultSet, error
 	return s.runQuery(ctx, pgRecentQuery(schema, c.Name, d))
 }
 
-func (s *pgSession) Query(ctx context.Context, raw string) (*ResultSet, error) {
+func (s *pgSession) Query(ctx context.Context, raw string) (*engine.ResultSet, error) {
 	return s.runQuery(ctx, raw)
 }
 
-func (s *pgSession) runQuery(ctx context.Context, sql string) (*ResultSet, error) {
+func (s *pgSession) runQuery(ctx context.Context, sql string) (*engine.ResultSet, error) {
 	start := time.Now()
 	rows, err := s.pool.Query(ctx, sql)
 	if err != nil {
@@ -479,7 +481,7 @@ func (s *pgSession) runQuery(ctx context.Context, sql string) (*ResultSet, error
 	}
 	defer rows.Close()
 
-	rs := &ResultSet{Query: sql, Language: "sql"}
+	rs := &engine.ResultSet{Query: sql, Language: "sql"}
 	for _, fd := range rows.FieldDescriptions() {
 		rs.Columns = append(rs.Columns, string(fd.Name))
 	}
@@ -501,9 +503,9 @@ func (s *pgSession) runQuery(ctx context.Context, sql string) (*ResultSet, error
 	return rs, nil
 }
 
-func (s *pgSession) ConnectHint() ConnectHint {
+func (s *pgSession) ConnectHint() engine.ConnectHint {
 	dsn := s.cont.DSN()
-	return ConnectHint{
+	return engine.ConnectHint{
 		Name:      s.cont.Name,
 		DSN:       dsn,
 		Shell:     fmt.Sprintf("psql %q", dsn),
@@ -513,7 +515,7 @@ func (s *pgSession) ConnectHint() ConnectHint {
 	}
 }
 
-func (s *pgSession) Restore() *RestoreResult { return s.restore }
+func (s *pgSession) Restore() *engine.RestoreResult { return s.restore }
 
 func (s *pgSession) Close() error {
 	s.pool.Close()
@@ -537,4 +539,25 @@ func formatValue(v any) string {
 	default:
 		return strings.Join(strings.Fields(fmt.Sprintf("%v", x)), " ")
 	}
+}
+
+// printableStrings extrai as sequências imprimíveis (>=2 chars) de um blob binário.
+func printableStrings(b []byte) []string {
+	var out []string
+	var cur strings.Builder
+	flush := func() {
+		if cur.Len() >= 2 {
+			out = append(out, cur.String())
+		}
+		cur.Reset()
+	}
+	for _, c := range b {
+		if c >= 0x20 && c < 0x7f {
+			cur.WriteByte(c)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return out
 }

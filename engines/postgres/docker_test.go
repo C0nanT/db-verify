@@ -1,6 +1,6 @@
 //go:build docker
 
-package main
+package postgres
 
 // Teste de fluxo completo (Camada 0 / regra "fluxo completo exige Docker").
 // Gera um dump Postgres pequeno com o próprio teste (não versionado, não
@@ -24,6 +24,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -31,6 +32,7 @@ import (
 
 	"db-verify/internal/conformance"
 	"db-verify/internal/docker"
+	"db-verify/internal/engine"
 )
 
 const testSchemaSQL = `
@@ -105,32 +107,6 @@ INSERT INTO tbl_no_option (label, other) VALUES
   ('a', 'x'), ('b', 'y');
 `
 
-// waitDockerPostgres espera o banco de origem existir de verdade. pg_isready
-// sozinho aceita o servidor temporário da imagem oficial (antes de srcdb e
-// do restart) — o psql em seguida falha com "database does not exist" ou
-// "system is shutting down". Duas consultas SELECT 1 seguidas, mesmo padrão
-// de pgContainer.WaitReady.
-func waitDockerPostgres(t *testing.T, name, user, db string, timeout time.Duration) {
-	t.Helper()
-	check := func() bool {
-		return exec.Command("docker", "exec", name,
-			"psql", "-U", user, "-d", db, "-c", "SELECT 1").Run() == nil
-	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if check() {
-			time.Sleep(300 * time.Millisecond)
-			if check() {
-				return
-			}
-			continue
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	logs, _ := exec.Command("docker", "logs", "--tail", "20", name).CombinedOutput()
-	t.Fatalf("timeout esperando o Postgres de origem ficar pronto:\n%s", logs)
-}
-
 // buildSourceDump sobe um Postgres "de origem" descartável, aplica o schema
 // de teste e devolve o caminho de um dump em formato custom gerado por
 // pg_dump dentro do próprio container (mesma versão de servidor e cliente).
@@ -172,26 +148,42 @@ func buildSourceDump(t *testing.T) string {
 	return local
 }
 
+// pgBackup monta o Backup que Provision recebe a partir do cabeçalho do dump,
+// sem passar pela detecção (que mora em internal/detect e não pode ser
+// importada por uma engine).
+func pgBackup(t *testing.T, path string) *engine.Backup {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("abrir dump: %v", err)
+	}
+	defer f.Close()
+	head := make([]byte, 8192)
+	n, err := f.Read(head)
+	if err != nil {
+		t.Fatalf("ler cabeçalho: %v", err)
+	}
+	m, _ := Engine{}.Detect(head[:n], path)
+	return &engine.Backup{
+		Path: path, Compression: "none", Engine: "postgres",
+		Format: m.Format, Version: m.Version, OriginDB: m.OriginDB,
+	}
+}
+
 func TestFullFlow_Postgres(t *testing.T) {
 	conformance.RequireDocker(t)
 
 	dumpPath := buildSourceDump(t)
 
-	backup, err := InspectDump(dumpPath)
-	if err != nil {
-		t.Fatalf("InspectDump: %v", err)
-	}
+	backup := pgBackup(t, dumpPath)
 	if backup.Format != "custom" {
 		t.Fatalf("Format = %q, want custom", backup.Format)
 	}
 
-	eng, ok := Lookup("postgres")
-	if !ok {
-		t.Fatal(`engine "postgres" não registrada`)
-	}
+	eng := Engine{}
 
 	ctx := context.Background()
-	sess, err := eng.Provision(ctx, backup, ProvisionOpts{
+	sess, err := eng.Provision(ctx, backup, engine.ProvisionOpts{
 		Port: docker.FreePort(), Jobs: 4, DBName: "verify", ExactCounts: true,
 	})
 	if err != nil {

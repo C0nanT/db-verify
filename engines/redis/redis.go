@@ -248,7 +248,7 @@ func (c *redisContainer) StartContainer(ctx context.Context) error {
 
 // CopyDump posiciona o backup como /data/dump.rdb (dir e nome default do
 // Redis) num container que ainda não subiu. Isso descarta a técnica das
-// demais engines (`docker exec ... sh -c "cat > arquivo"`, postgres.go/
+// demais engines (`docker exec ... sh -c "cat > arquivo"`, engines/postgres/postgres.go/
 // engines/mysql/mysql.go): não há processo para executar num container
 // parado. Em vez disso, `docker cp -` aceita um stream tar via stdin mesmo
 // com o container parado. Para o caso comum (sem compressão) isso é feito
@@ -836,7 +836,7 @@ func (s *redisSession) Query(ctx context.Context, raw string) (*engine.ResultSet
 // redisFormatResult achata o retorno solto (any) do client.Do em linhas de
 // texto — RESP pode devolver string, inteiro, nil, ou uma lista, e o
 // resultado precisa virar texto legível de um jeito ou de outro, igual
-// formatValue (postgres.go) faz para os tipos de coluna SQL.
+// formatValue (engines/postgres/postgres.go) faz para os tipos de coluna SQL.
 func redisFormatResult(v any) []string {
 	switch x := v.(type) {
 	case nil:

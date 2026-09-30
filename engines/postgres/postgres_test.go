@@ -1,4 +1,4 @@
-package main
+package postgres
 
 // Testes de caracterização das partes de postgres.go que não dependem de um
 // banco vivo: montagem do SQL de "recentes" (pgRecentQuery, antes

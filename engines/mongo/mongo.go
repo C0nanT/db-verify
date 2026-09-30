@@ -508,7 +508,7 @@ func mongoCompactJSON(v any) string {
 }
 
 // mongoFormatScalar formata um valor-folha (não documento, não array) —
-// mesmo espírito de formatValue (postgres.go) e mysqlFormatValue (engines/mysql/mysql.go):
+// mesmo espírito de formatValue (engines/postgres/postgres.go) e mysqlFormatValue (engines/mysql/mysql.go):
 // nulo/data/binário/string recebem tratamento explícito, o resto cai no
 // %v genérico.
 func mongoFormatScalar(v any) string {

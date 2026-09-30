@@ -21,7 +21,7 @@ paths = ['''(?:^|/)testdata/''']
 # Cada entrada documenta onde a senha vive; não ampliar sem necessidade.
 
 [[allowlists]]
-description = "Postgres — Pass/POSTGRES_PASSWORD=postgres em postgres.go, docker_test.go, postgres_conformance_test.go"
+description = "Postgres — Pass/POSTGRES_PASSWORD=postgres em engines/postgres/ (postgres.go, docker_test.go, conformance.go)"
 regexes = [
   '''(?i)^postgres$''',
 ]

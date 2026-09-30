@@ -12,7 +12,7 @@ package relational
 // replica a decisão em SQL a partir da mesma lista).
 // Consumidores:
 //   - Postgres: monta a CASE WHEN em SQL a partir de OrderColumnTiers (ver
-//     postgres.go, tablesSQL);
+//     engines/postgres/postgres.go, tablesSQL);
 //   - MySQL/MariaDB e SQLite: decidem em Go via ChooseOrderColumn,
 //     cada um informando o próprio conjunto de tipos de data;
 //   - Mongo: usa só as camadas 1–3 de nome, achatadas (ver engines/mongo/mongo.go).

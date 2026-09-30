@@ -118,7 +118,7 @@ func (Engine) Expects() string {
 }
 
 // Provision sobe o container, espera ficar pronto, copia o dump, restaura e
-// conecta — mesmo formato grosso de pgEngine.Provision, para o número de
+// conecta — mesmo formato grosso de postgres.Engine.Provision, para o número de
 // seams continuar sendo um.
 func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	if err := docker.DockerAvailable(ctx); err != nil {

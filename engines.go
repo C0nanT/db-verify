@@ -3,6 +3,7 @@ package main
 import (
 	"db-verify/engines/mongo"
 	"db-verify/engines/mysql"
+	"db-verify/engines/postgres"
 	"db-verify/engines/redis"
 	"db-verify/engines/sqlite"
 )
@@ -19,7 +20,7 @@ var _ = registrarEngines(
 	mysql.MariaDBEngine{},
 	mongo.Engine{},
 	mysql.Engine{},
-	pgEngine{},
+	postgres.Engine{},
 	redis.Engine{},
 	sqlite.Engine{},
 )
