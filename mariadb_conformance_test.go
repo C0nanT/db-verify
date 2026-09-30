@@ -19,10 +19,12 @@ import (
 	"time"
 
 	"os/exec"
+
+	"db-verify/internal/conformance"
 )
 
 func init() {
-	registerConformanceFixture("mariadb", ConformanceFixture{
+	conformance.Register("mariadb", conformance.ConformanceFixture{
 		BuildValid:     mariadbConformanceValidBackup,
 		BuildTruncated: mariadbConformanceTruncatedBackup,
 		ValidQuery:     "SELECT 1",
@@ -96,7 +98,7 @@ func mariadbConformanceSourceDump(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
 
-	srcName := uniqueName("conf-src-mariadb")
+	srcName := conformance.UniqueName("conf-src-mariadb")
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName,
 		"-e", "MARIADB_ROOT_PASSWORD=root",
 		"-e", "MARIADB_DATABASE=srcdb",
@@ -129,9 +131,9 @@ func mariadbConformanceSourceDump(t *testing.T) string {
 
 // mariadbConformanceValidBackup implementa ConformanceFixture.BuildValid
 // para o MariaDB.
-func mariadbConformanceValidBackup(t *testing.T) ConformanceBackup {
+func mariadbConformanceValidBackup(t *testing.T) conformance.ConformanceBackup {
 	t.Helper()
-	return ConformanceBackup{
+	return conformance.ConformanceBackup{
 		Path: mariadbConformanceSourceDump(t),
 		WantCollections: map[string]int64{
 			"com_dados": 25,

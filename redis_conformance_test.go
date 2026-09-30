@@ -32,10 +32,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"db-verify/internal/conformance"
 )
 
 func init() {
-	registerConformanceFixture("redis", ConformanceFixture{
+	conformance.Register("redis", conformance.ConformanceFixture{
 		BuildValid:     redisConformanceValidBackup,
 		BuildTruncated: redisConformanceTruncatedBackup,
 		ValidQuery:     "PING",
@@ -74,7 +76,7 @@ func redisConformanceSourceDump(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
 
-	srcName := uniqueName("conf-src-redis")
+	srcName := conformance.UniqueName("conf-src-redis")
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName, "redis:7-alpine").CombinedOutput()
 	if err != nil {
 		t.Fatalf("falha ao subir container de origem: %s", strings.TrimSpace(string(out)))
@@ -107,9 +109,9 @@ func redisConformanceSourceDump(t *testing.T) string {
 
 // redisConformanceValidBackup implementa ConformanceFixture.BuildValid para
 // o Redis.
-func redisConformanceValidBackup(t *testing.T) ConformanceBackup {
+func redisConformanceValidBackup(t *testing.T) conformance.ConformanceBackup {
 	t.Helper()
-	return ConformanceBackup{
+	return conformance.ConformanceBackup{
 		Path: redisConformanceSourceDump(t),
 		WantCollections: map[string]int64{
 			"com_dados":        25,

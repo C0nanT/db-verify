@@ -14,10 +14,10 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seção "Suíte de conformidade").
 
 **Blocked by:** 01, 02
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O pacote `conformance` com o registro e os helpers só compila com a tag `docker`; o binário de produção não o carrega.
-- [ ] A suíte genérica na raiz lê as fixtures do registro novo e não tem nenhum `if` por nome de engine.
-- [ ] Remover a fixture de uma engine (teste manual, revertido) faz a suíte reprovar com a mensagem de "engine registrada sem ConformanceFixture".
-- [ ] Os helpers antigos da suíte na raiz deixaram de existir.
-- [ ] `./scripts/check full` passa.
+- [x] O pacote `conformance` com o registro e os helpers só compila com a tag `docker`; o binário de produção não o carrega.
+- [x] A suíte genérica na raiz lê as fixtures do registro novo e não tem nenhum `if` por nome de engine.
+- [x] Remover a fixture de uma engine (teste manual, revertido) faz a suíte reprovar com a mensagem de "engine registrada sem ConformanceFixture".
+- [x] Os helpers antigos da suíte na raiz deixaram de existir.
+- [x] `./scripts/check full` passa.

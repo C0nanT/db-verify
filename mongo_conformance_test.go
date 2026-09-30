@@ -27,11 +27,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 
+	"db-verify/internal/conformance"
 	"db-verify/internal/docker"
 )
 
 func init() {
-	registerConformanceFixture("mongodb", ConformanceFixture{
+	conformance.Register("mongodb", conformance.ConformanceFixture{
 		BuildValid:     mongoConformanceValidBackup,
 		BuildTruncated: mongoConformanceTruncatedBackup,
 		ValidQuery:     `{"ping": 1}`,
@@ -100,7 +101,7 @@ func mongoConformanceSourceDump(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
 
-	srcName := uniqueName("conf-src-mongo")
+	srcName := conformance.UniqueName("conf-src-mongo")
 	port := docker.FreePortFrom(mongoDefaultPort)
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName,
 		"-p", fmt.Sprintf("127.0.0.1:%d:27017", port),
@@ -129,9 +130,9 @@ func mongoConformanceSourceDump(t *testing.T) string {
 
 // mongoConformanceValidBackup implementa ConformanceFixture.BuildValid para
 // o MongoDB.
-func mongoConformanceValidBackup(t *testing.T) ConformanceBackup {
+func mongoConformanceValidBackup(t *testing.T) conformance.ConformanceBackup {
 	t.Helper()
-	return ConformanceBackup{
+	return conformance.ConformanceBackup{
 		Path: mongoConformanceSourceDump(t),
 		WantCollections: map[string]int64{
 			"com_dados": 25,

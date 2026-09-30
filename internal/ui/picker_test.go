@@ -17,6 +17,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"db-verify/internal/conformance"
 )
 
 // TestFindBackups_ListaTodoArquivoReconhecido cobre a mudança central do
@@ -25,9 +27,9 @@ import (
 // a engine detectada.
 func TestFindBackups_ListaTodoArquivoReconhecido(t *testing.T) {
 	dir := t.TempDir()
-	copyFixture(t, "../../testdata/headers/custom.dump", filepath.Join(dir, "a.dump"))
-	copyFixture(t, "../../testdata/headers/plain.sql", filepath.Join(dir, "b.sql"))
-	copyFixture(t, "../../testdata/headers/random.txt", filepath.Join(dir, "c.txt"))
+	copyFixture(t, conformance.HeaderPath(t, "custom.dump"), filepath.Join(dir, "a.dump"))
+	copyFixture(t, conformance.HeaderPath(t, "plain.sql"), filepath.Join(dir, "b.sql"))
+	copyFixture(t, conformance.HeaderPath(t, "random.txt"), filepath.Join(dir, "c.txt"))
 
 	backups, err := findBackups(dir)
 	if err != nil {
@@ -50,11 +52,11 @@ func TestFindBackups_ListaTodoArquivoReconhecido(t *testing.T) {
 // diretórios nem dotfiles.
 func TestFindBackups_IgnoraDiretoriosEArquivosOcultos(t *testing.T) {
 	dir := t.TempDir()
-	copyFixture(t, "../../testdata/headers/plain.sql", filepath.Join(dir, "b.sql"))
+	copyFixture(t, conformance.HeaderPath(t, "plain.sql"), filepath.Join(dir, "b.sql"))
 	if err := os.Mkdir(filepath.Join(dir, "subdir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	copyFixture(t, "../../testdata/headers/plain.sql", filepath.Join(dir, ".hidden.sql"))
+	copyFixture(t, conformance.HeaderPath(t, "plain.sql"), filepath.Join(dir, ".hidden.sql"))
 
 	backups, err := findBackups(dir)
 	if err != nil {

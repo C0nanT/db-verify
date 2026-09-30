@@ -2,19 +2,17 @@
 
 package main
 
-// Suíte de conformidade (SPEC.md, "Camada 2 — suíte de conformidade da
-// Session"): um único corpo de teste, parametrizado pela lista de engines
-// registradas (Engines()), sem nenhuma ramificação por nome de engine. Cada
-// engine declara, no seu próprio arquivo de teste (ex.:
-// postgres_conformance_test.go), como gerar seu backup de teste mínimo
-// (válido e truncado) através de registerConformanceFixture, chamado de um
-// init(). Uma engine registrada sem fixture correspondente falha aqui — a
-// partir deste ticket, "a engine está pronta" significa exatamente "passa
-// nesta suíte sem nenhuma exceção específica".
+// Suíte de conformidade da Session: um único corpo de teste, parametrizado
+// pela lista de engines registradas (Engines()), sem nenhuma ramificação por
+// nome de engine. Cada engine declara como gerar seu backup de teste mínimo
+// (válido e truncado) cadastrando uma conformance.ConformanceFixture via
+// conformance.Register, chamado de um init(). Uma engine registrada sem
+// fixture correspondente falha aqui — "a engine está pronta" significa
+// exatamente "passa nesta suíte sem nenhuma exceção específica".
 //
 // Exige Docker, por isso fica atrás da build tag "docker" — a camada de
-// detecção (detect_test.go), que concentra a lógica que mais quebra, continua
-// rodando em qualquer máquina sem Docker.
+// detecção, que concentra a lógica que mais quebra, continua rodando em
+// qualquer máquina sem Docker.
 //
 // Roda com: go test -tags docker ./...
 
@@ -25,63 +23,20 @@ import (
 	"os/exec"
 	"strconv"
 	"testing"
+
+	"db-verify/internal/conformance"
 )
-
-// ConformanceBackup é o que BuildValid devolve: o caminho do backup mínimo
-// gerado (duas coleções — uma com linhas e uma vazia, uma com coluna de data
-// e uma sem) e o oráculo contra o qual o corpo genérico compara o que a
-// engine devolveu.
-type ConformanceBackup struct {
-	Path string
-	// WantCollections é o conjunto exato de coleções esperadas, com a
-	// contagem exata de cada uma (a coleção vazia entra com 0).
-	WantCollections map[string]int64
-	// DateCollection é o nome da coleção com coluna de data, usada para
-	// verificar o limite de 20 linhas e a ordem decrescente de Recent.
-	// Precisa ter mais de 20 linhas para exercitar o limite de verdade.
-	DateCollection string
-	// DateColumn é a coluna usada para ordenar DateCollection; os valores
-	// que Recent devolve para ela precisam ordenar corretamente como string
-	// (ex.: "AAAA-MM-DD[ HH:MM:SS]").
-	DateColumn string
-}
-
-// ConformanceFixture é o que cada engine declara sobre como gerar seus
-// backups de teste. O corpo de teste genérico abaixo só chama essas funções;
-// toda lógica específica de engine (como gerar um dump, como corrompê-lo, o
-// que é um comando nativo válido/inválido) fica contida na fixture.
-type ConformanceFixture struct {
-	// BuildValid gera o backup mínimo conhecido descrito no pacote.
-	BuildValid func(t *testing.T) ConformanceBackup
-	// BuildTruncated gera um backup deliberadamente truncado/corrompido, que
-	// deve produzir erros de restore reportados, não engolidos.
-	BuildTruncated func(t *testing.T) string
-	// ValidQuery é um comando nativo que deve devolver resultado sem erro.
-	ValidQuery string
-	// InvalidQuery é um comando nativo malformado, que deve devolver erro
-	// sem pânico.
-	InvalidQuery string
-}
-
-var conformanceFixtures = map[string]ConformanceFixture{}
-
-// registerConformanceFixture cadastra a fixture de conformidade de uma
-// engine. Chamado do init() do arquivo de conformidade de cada engine (ex.:
-// postgres_conformance_test.go).
-func registerConformanceFixture(engine string, f ConformanceFixture) {
-	conformanceFixtures[engine] = f
-}
 
 // TestEngineConformance é o corpo único de conformidade: roda contra toda
 // engine registrada, sem nenhuma ramificação por nome de engine.
 func TestEngineConformance(t *testing.T) {
 	for _, eng := range Engines() {
 		t.Run(eng.Name(), func(t *testing.T) {
-			fx, ok := conformanceFixtures[eng.Name()]
+			fx, ok := conformance.Lookup(eng.Name())
 			if !ok {
-				t.Fatalf("engine %q registrada sem ConformanceFixture — registre uma via registerConformanceFixture antes de considerar a engine pronta", eng.Name())
+				t.Fatalf("engine %q registrada sem ConformanceFixture — registre uma via conformance.Register antes de considerar a engine pronta", eng.Name())
 			}
-			requireDocker(t)
+			conformance.RequireDocker(t)
 
 			t.Run("backup válido", func(t *testing.T) {
 				testConformanceValid(t, eng, fx)
@@ -104,7 +59,7 @@ func conformanceProvisionOpts() ProvisionOpts {
 
 // testConformanceValid provisiona o backup mínimo declarado pela fixture e
 // verifica o contrato inteiro que toda engine precisa cumprir.
-func testConformanceValid(t *testing.T, eng Engine, fx ConformanceFixture) {
+func testConformanceValid(t *testing.T, eng Engine, fx conformance.ConformanceFixture) {
 	ctx := context.Background()
 	cb := fx.BuildValid(t)
 	if len(cb.WantCollections) == 0 {
@@ -169,7 +124,7 @@ func testConformanceValid(t *testing.T, eng Engine, fx ConformanceFixture) {
 			t.Errorf("len(collections) = %d, want %d (veio %v)", len(collections), len(cb.WantCollections), collections)
 		}
 		for name, want := range cb.WantCollections {
-			c, ok := collectionByName(collections, name)
+			c, ok := conformance.CollectionByName(collections, name)
 			if !ok {
 				t.Errorf("coleção %q não apareceu na listagem", name)
 				continue
@@ -181,7 +136,7 @@ func testConformanceValid(t *testing.T, eng Engine, fx ConformanceFixture) {
 	})
 
 	t.Run("Recent: no máximo 20 linhas, ordem decrescente na coleção com data", func(t *testing.T) {
-		c, ok := collectionByName(collections, cb.DateCollection)
+		c, ok := conformance.CollectionByName(collections, cb.DateCollection)
 		if !ok {
 			t.Fatalf("coleção com data %q não apareceu na listagem", cb.DateCollection)
 		}
@@ -240,13 +195,13 @@ func testConformanceValid(t *testing.T, eng Engine, fx ConformanceFixture) {
 		if hint.Name == "" {
 			t.Skip("engine não expõe um container nomeado (ConnectHint.Name vazio)")
 		}
-		if !containerExists(hint.Name) {
+		if !conformance.ContainerExists(hint.Name) {
 			t.Fatal("container deveria existir antes do Close()")
 		}
 		if err := closeSession(); err != nil {
 			t.Fatalf("Close: %v", err)
 		}
-		if containerExists(hint.Name) {
+		if conformance.ContainerExists(hint.Name) {
 			t.Fatal("container ainda existe depois do Close()")
 		}
 	})
@@ -254,7 +209,7 @@ func testConformanceValid(t *testing.T, eng Engine, fx ConformanceFixture) {
 
 // testConformanceTruncated prova que erros de restore de um backup
 // deliberadamente truncado são reportados, não engolidos.
-func testConformanceTruncated(t *testing.T, eng Engine, fx ConformanceFixture) {
+func testConformanceTruncated(t *testing.T, eng Engine, fx conformance.ConformanceFixture) {
 	ctx := context.Background()
 	path := fx.BuildTruncated(t)
 
@@ -290,7 +245,7 @@ func testConformanceTruncated(t *testing.T, eng Engine, fx ConformanceFixture) {
 // Provision devolve erro (nunca Session) e não resta container
 // db-verify-<pid>, nem parado. Engines sem container passam trivialmente
 // na segunda checagem, mas não na primeira.
-func testConformanceCancel(t *testing.T, eng Engine, fx ConformanceFixture) {
+func testConformanceCancel(t *testing.T, eng Engine, fx conformance.ConformanceFixture) {
 	cb := fx.BuildValid(t)
 	backup, err := InspectDumpAs(cb.Path, eng.Name())
 	if err != nil {
@@ -304,9 +259,9 @@ func testConformanceCancel(t *testing.T, eng Engine, fx ConformanceFixture) {
 	t.Cleanup(forceRemove)
 	requireNoContainer := func(t *testing.T, when string) {
 		t.Helper()
-		// containerExists usa `docker inspect`, que encontra o container em
+		// conformance.ContainerExists usa `docker inspect`, que encontra o container em
 		// qualquer estado (Created/Exited inclusive), não só rodando.
-		if containerExists(name) {
+		if conformance.ContainerExists(name) {
 			forceRemove()
 			t.Fatalf("container %s existe %s", name, when)
 		}

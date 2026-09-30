@@ -15,10 +15,12 @@ import (
 	"time"
 
 	"os/exec"
+
+	"db-verify/internal/conformance"
 )
 
 func init() {
-	registerConformanceFixture("mysql", ConformanceFixture{
+	conformance.Register("mysql", conformance.ConformanceFixture{
 		BuildValid:     mysqlConformanceValidBackup,
 		BuildTruncated: mysqlConformanceTruncatedBackup,
 		ValidQuery:     "SELECT 1",
@@ -92,7 +94,7 @@ func mysqlConformanceSourceDump(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
 
-	srcName := uniqueName("conf-src-mysql")
+	srcName := conformance.UniqueName("conf-src-mysql")
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName,
 		"-e", "MYSQL_ROOT_PASSWORD=root",
 		"-e", "MYSQL_DATABASE=srcdb",
@@ -125,9 +127,9 @@ func mysqlConformanceSourceDump(t *testing.T) string {
 
 // mysqlConformanceValidBackup implementa ConformanceFixture.BuildValid para
 // o MySQL.
-func mysqlConformanceValidBackup(t *testing.T) ConformanceBackup {
+func mysqlConformanceValidBackup(t *testing.T) conformance.ConformanceBackup {
 	t.Helper()
-	return ConformanceBackup{
+	return conformance.ConformanceBackup{
 		Path: mysqlConformanceSourceDump(t),
 		WantCollections: map[string]int64{
 			"com_dados": 25,

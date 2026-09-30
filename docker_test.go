@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"db-verify/internal/conformance"
 	"db-verify/internal/docker"
 )
 
@@ -139,7 +140,7 @@ func buildSourceDump(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
 
-	srcName := uniqueName("src")
+	srcName := conformance.UniqueName("src")
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName,
 		"-e", "POSTGRES_PASSWORD=postgres",
 		"-e", "POSTGRES_USER=postgres",
@@ -172,7 +173,7 @@ func buildSourceDump(t *testing.T) string {
 }
 
 func TestFullFlow_Postgres(t *testing.T) {
-	requireDocker(t)
+	conformance.RequireDocker(t)
 
 	dumpPath := buildSourceDump(t)
 
@@ -227,7 +228,7 @@ func TestFullFlow_Postgres(t *testing.T) {
 			"tbl_empty":            0,
 		}
 		for name, wantRows := range want {
-			c, ok := collectionByName(collections, name)
+			c, ok := conformance.CollectionByName(collections, name)
 			if !ok {
 				t.Errorf("tabela %q não apareceu na listagem", name)
 				continue
@@ -239,7 +240,7 @@ func TestFullFlow_Postgres(t *testing.T) {
 	})
 
 	t.Run("tabela vazia aparece com contagem zero, não é omitida", func(t *testing.T) {
-		c, ok := collectionByName(collections, "tbl_empty")
+		c, ok := conformance.CollectionByName(collections, "tbl_empty")
 		if !ok {
 			t.Fatal("tbl_empty não apareceu na listagem")
 		}
@@ -276,7 +277,7 @@ func TestFullFlow_Postgres(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.table, func(t *testing.T) {
-				c, ok := collectionByName(collections, tc.table)
+				c, ok := conformance.CollectionByName(collections, tc.table)
 				if !ok {
 					t.Fatalf("tabela %q não apareceu na listagem", tc.table)
 				}
@@ -298,7 +299,7 @@ func TestFullFlow_Postgres(t *testing.T) {
 	})
 
 	t.Run("consulta de recentes: no máximo 20 linhas, ordem decrescente", func(t *testing.T) {
-		c, ok := collectionByName(collections, "tbl_created")
+		c, ok := conformance.CollectionByName(collections, "tbl_created")
 		if !ok {
 			t.Fatal("tbl_created não apareceu na listagem")
 		}
@@ -328,11 +329,11 @@ func TestFullFlow_Postgres(t *testing.T) {
 
 	t.Run("container removido ao encerrar", func(t *testing.T) {
 		hint := sess.ConnectHint()
-		if !containerExists(hint.Name) {
+		if !conformance.ContainerExists(hint.Name) {
 			t.Fatal("container deveria existir antes do Close()")
 		}
 		sess.Close()
-		if containerExists(hint.Name) {
+		if conformance.ContainerExists(hint.Name) {
 			t.Fatal("container ainda existe depois do Close()")
 		}
 	})
@@ -343,11 +344,11 @@ func TestFullFlow_Postgres(t *testing.T) {
 // teste simula os dois casos operando diretamente sobre o container Postgres
 // (pgContainer, antes Container) e confirma por inspeção direta do Docker.
 func TestContainerKeep(t *testing.T) {
-	requireDocker(t)
+	conformance.RequireDocker(t)
 
 	ctx := context.Background()
 	cont := &pgContainer{
-		Name:  uniqueName("keep"),
+		Name:  conformance.UniqueName("keep"),
 		Image: "postgres:16-alpine",
 		Port:  docker.FreePort(),
 		DB:    "verify",
@@ -363,12 +364,12 @@ func TestContainerKeep(t *testing.T) {
 		t.Fatalf("WaitReady: %v", err)
 	}
 
-	if !containerExists(cont.Name) {
+	if !conformance.ContainerExists(cont.Name) {
 		t.Fatal("esperava container presente (simulando --keep, ou seja, sem chamar Remove())")
 	}
 
 	cont.Remove()
-	if containerExists(cont.Name) {
+	if conformance.ContainerExists(cont.Name) {
 		t.Fatal("esperava container removido após Remove() explícito")
 	}
 }

@@ -13,10 +13,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"db-verify/internal/conformance"
 )
 
 func init() {
-	registerConformanceFixture("postgres", ConformanceFixture{
+	conformance.Register("postgres", conformance.ConformanceFixture{
 		BuildValid:     pgConformanceValidBackup,
 		BuildTruncated: pgConformanceTruncatedBackup,
 		ValidQuery:     "SELECT 1",
@@ -52,7 +54,7 @@ func pgConformanceSourceDump(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
 
-	srcName := uniqueName("conf-src")
+	srcName := conformance.UniqueName("conf-src")
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName,
 		"-e", "POSTGRES_PASSWORD=postgres",
 		"-e", "POSTGRES_USER=postgres",
@@ -86,9 +88,9 @@ func pgConformanceSourceDump(t *testing.T) string {
 
 // pgConformanceValidBackup implementa ConformanceFixture.BuildValid para o
 // Postgres.
-func pgConformanceValidBackup(t *testing.T) ConformanceBackup {
+func pgConformanceValidBackup(t *testing.T) conformance.ConformanceBackup {
 	t.Helper()
-	return ConformanceBackup{
+	return conformance.ConformanceBackup{
 		Path: pgConformanceSourceDump(t),
 		WantCollections: map[string]int64{
 			"com_dados": 25,

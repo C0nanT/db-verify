@@ -99,8 +99,9 @@ follow-up, unless `--keep` was passed.
 - `//go:build docker` files (`conformance_test.go`, `docker_test.go`,
   `*_conformance_test.go`): require Docker. `conformance_test.go` is a single generic
   test body parameterized over `Engines()` — no branching per engine name. Each engine
-  registers a `ConformanceFixture` (via `registerConformanceFixture` in its own
-  `init()`) describing how to build a minimal valid backup and a truncated/corrupt one;
+  registers a `conformance.ConformanceFixture` (via `conformance.Register` from
+  `internal/conformance`, docker-tagged, in its own `init()`) describing how to build
+  a minimal valid backup and a truncated/corrupt one;
   "the engine is done" means it passes this suite with no engine-specific exception.
   `sqlite_test.go` covers the SQLite engine's full contract without the `docker` tag
   since it needs no container — its conformance fixture stays behind the tag only
