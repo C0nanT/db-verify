@@ -13,9 +13,9 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seção "Documentação").
 
 **Blocked by:** 13
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Nenhum dos documentos acima cita um arquivo Go da raiz que não existe mais.
-- [ ] O `CLAUDE.md` não menciona `func init() { Register(...) }` nem `registerConformanceFixture` como mecanismo atual.
-- [ ] O ADR existe, em pt-BR, com contexto, decisão e consequências.
-- [ ] `./scripts/check fast` passa.
+- [x] Nenhum dos documentos acima cita um arquivo Go da raiz que não existe mais.
+- [x] O `CLAUDE.md` não menciona `func init() { Register(...) }` nem `registerConformanceFixture` como mecanismo atual.
+- [x] O ADR existe, em pt-BR, com contexto, decisão e consequências.
+- [x] `./scripts/check fast` passa.

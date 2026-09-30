@@ -55,7 +55,24 @@ separate ad-hoc lint path. Secrets scan config is `.gitleaks.toml`.
 
 ## Architecture
 
-### Engine/Session seam (see `engine.go`)
+One binary, one `go.mod`, but the code lives in Go packages under `internal/` (plus
+`engines/`), so the compiler hides what is private to each package and the `depguard`
+rule in `.golangci.yml` (run by `scripts/check fast`) rejects imports that point the
+wrong way. Decisions and rationale: `docs/adr/0001-monolito-modular.md`.
+
+| Package | Responsibility | May import (project) |
+|---|---|---|
+| `main` (root) | flags, `run()`, the explicit engine list (`engines.go`), tests of the assembled set | all |
+| `internal/engine` | `Engine`/`Session` interfaces, shared types (`Match`, `Backup`, `ProvisionOpts`, `Collection`, `Health`, `ResultSet`…), `HumanSize`, registry (`Register`, `Engines`, `Lookup`) | none |
+| `internal/relational` | order-column heuristic shared by relational engines | `engine` |
+| `internal/docker` | `DockerHost`: daemon check, free ports, port-conflict retry | — |
+| `internal/dumpio` | `OpenMaybeCompressed` (gzip/zstd/bzip2) | none |
+| `internal/detect` | header reading, engine contest, `InspectDump` | `engine`, `dumpio` |
+| `internal/ui` | backup picker and bubbletea TUI | `engine`, `detect` |
+| `internal/conformance` | fixture registry and suite helpers (`docker` build tag), `HeaderPath` for `testdata/headers/` | `engine` |
+| `engines/postgres`, `engines/mysql` (MySQL + MariaDB), `engines/sqlite`, `engines/redis`, `engines/mongo` | one engine each | `engine`, `relational`, `docker`, `dumpio`, `conformance` (only in `docker`-tagged files) |
+
+### Engine/Session seam (`internal/engine`)
 
 Everything funnels through one interface pair:
 
@@ -65,48 +82,59 @@ Everything funnels through one interface pair:
 - `Session` — the live connection to a restored backup: `Health`, `Collections`,
   `Recent`, `Query`, `ConnectHint`, `Restore`, `Close`.
 
-Each engine lives in its own file (`engines/postgres/`, `engines/mysql/` (MySQL + MariaDB), `engines/sqlite/`,
-`engines/redis/`, `engines/mongo/`) implementing both interfaces against Docker + that engine's
-driver/CLI, and self-registers via `func init() { Register(xEngine{}) }`. Callers
-(`main.go`, `picker.go`, `tui.go`, `detect.go`) only ever depend on `Engine`/`Session`
-and the `Engines()`/`Lookup()` registry — never on a concrete engine type. `relational.go`
-holds the "choose an order column" heuristic shared by the relational engines (Postgres,
-MySQL/MariaDB): a tiered list of known column names (created/published/updated/date/PK),
-consumed differently by each engine's dialect but sourced from one place.
+Each engine is a package implementing both interfaces against Docker + that engine's
+driver/CLI. Engines do **not** self-register: `engines.go` in the root holds the single
+explicit list (a package-level initializer calling `engine.Register` per engine), in
+the order they are tried. Callers (`internal/ui`, `internal/detect`) only ever depend
+on `Engine`/`Session` and the `Engines()`/`Lookup()` registry — never on a concrete
+engine package. `internal/relational` holds the "choose an order column" heuristic
+shared by the relational engines (Postgres, MySQL/MariaDB): a tiered list of known
+column names (created/published/updated/date/PK), consumed differently by each
+engine's dialect but sourced from one place.
 
-See the CLAUDE.md **SOLID** section below for how this seam is meant to be extended
-(new engine = new file behind the interface, not a branch in existing code).
+See the **SOLID** section below for how this seam is meant to be extended
+(new engine = new package behind the interface plus one line in the list, not a
+branch in existing code).
 
-### Detection flow (`detect.go`)
+### Detection flow (`internal/detect`)
 
-Two phases: (1) open the file and decompress just the header (~8 KB, gzip/zstd/bzip2 —
-never the whole file, so a huge dump doesn't stall detection), then (2) ask every
-registered engine to `Detect` that header and keep the highest-confidence match (magic
-bytes `100` > extension `50` > guess `10`; ties go to whichever engine registered
-first). `--engine` skips phase 2 entirely and asks only the forced engine.
+Two phases: (1) open the file and decompress just the header (~8 KB, gzip/zstd/bzip2 via
+`internal/dumpio` — never the whole file, so a huge dump doesn't stall detection), then
+(2) ask every registered engine to `Detect` that header and keep the highest-confidence
+match (magic bytes `100` > extension `50` > guess `10`; ties go to whichever engine
+comes first in the list in `engines.go`). `--engine` skips phase 2 entirely and asks
+only the forced engine.
 
 ### Flow through `main.go`
 
-Parses flags → detects/looks up the engine → `Provision` (container up, restore,
-connect) → hands the resulting `Session` to the bubbletea `tui.go` model → on exit,
-`Close()`s the session and prints a `ConnectHint` (DSN/shell command) for manual
-follow-up, unless `--keep` was passed.
+`run()` reads top to bottom: parses flags → detects/looks up the engine → `Provision`
+(container up, restore, connect) → hands the resulting `Session` to the bubbletea model
+in `internal/ui` → on exit, `Close()`s the session and prints a `ConnectHint`
+(DSN/shell command) for manual follow-up, unless `--keep` was passed. There is no
+`internal/app`: with a single entry point it would be only indirection.
 
 ### Testing tiers
 
 - Plain `*_test.go` (no build tag): detection, per-engine heuristics, anything that
-  doesn't require a live container. Runs anywhere, no Docker needed.
-- `//go:build docker` files (`conformance_test.go`, `engines/postgres/docker_test.go`,
-  `engines/*/*conformance.go`): require Docker. `conformance_test.go` is a single generic
+  doesn't require a live container. Runs anywhere, no Docker needed. Unit tests of an
+  engine live in that engine's package; `detect` tests use fakes; tests needing all
+  real engines (`InspectDump` over `testdata/headers/`, detection ties) sit in the root
+  next to `engines.go`.
+- `//go:build docker` files (`conformance_test.go` in the root,
+  `engines/postgres/docker_test.go`, `engines/*/conformance.go`,
+  `internal/conformance/`): require Docker. `conformance_test.go` is a single generic
   test body parameterized over `Engines()` — no branching per engine name. Each engine
-  registers a `conformance.ConformanceFixture` (via `conformance.Register` from
-  `internal/conformance`, docker-tagged, in its own `init()`) describing how to build
-  a minimal valid backup and a truncated/corrupt one;
-  "the engine is done" means it passes this suite with no engine-specific exception.
-  `engines/sqlite/sqlite_test.go` covers the SQLite engine's full contract without the `docker` tag
-  since it needs no container — its conformance fixture stays behind the tag only
-  because the shared suite requires Docker for the other engines.
-- Detection fixtures (raw headers/samples for each format) live in `testdata/headers/`.
+  package has a `conformance.go` with the `docker` build tag (not a `_test.go`, so other
+  packages can compile it) that registers, via `conformance.Register`, a
+  `conformance.ConformanceFixture` describing how to build a minimal valid backup and a
+  truncated/corrupt one. An engine in the list without a fixture fails the suite:
+  "the engine is done" means it passes with no engine-specific exception.
+  `engines/sqlite/sqlite_test.go` covers the SQLite engine's full contract without the
+  `docker` tag since it needs no container — its conformance fixture stays behind the tag
+  only because the shared suite requires Docker for the other engines.
+- Detection fixtures (raw headers/samples for each format) live in the single
+  `testdata/headers/` at the root; packages reach it through `conformance.HeaderPath`,
+  not `../../..` paths.
 
 ## SOLID
 
@@ -125,10 +153,11 @@ When applying a principle would require reshaping modules outside the current fl
 
 ### In this repo
 
-- **Policy** — `engine.go` (the `Engine`/`Session` interfaces, `Match`/`Backup`/`Collection`/`Health` types, the engine registry) and `relational.go` (heuristics shared by relational engines).
-- **Details** — the per-engine files (`engines/postgres/`, `engines/mysql/` (MySQL + MariaDB), `engines/mongo/`, `engines/redis/`, `engines/sqlite/`), each implementing `Engine`/`Session` against Docker and a specific DB driver/CLI.
-- **Wiring** — each engine file self-registers via `func init() { Register(xEngine{}) }`; callers (`main.go`, `picker.go`, `tui.go`, `detect.go`) depend only on the `Engine`/`Session` interfaces from `engine.go` and the `Engines()`/`Lookup()` registry, never on concrete engine types.
-- **Test substitution** — tests implement `Engine`/`Session` with fakes (e.g. `fakeEngine` in `detect_test.go`) instead of standing up a real container.
+- **Policy** — `internal/engine` (the `Engine`/`Session` interfaces, `Match`/`Backup`/`Collection`/`Health` types, the registry) and `internal/relational` (heuristics shared by relational engines).
+- **Details** — the engine packages (`engines/postgres`, `engines/mysql` (MySQL + MariaDB), `engines/mongo`, `engines/redis`, `engines/sqlite`), each implementing `Engine`/`Session` against Docker and a specific DB driver/CLI.
+- **Wiring** — the explicit list in `engines.go` (root) is the only place that names concrete engines and their tie-break order; `internal/ui` and `internal/detect` depend only on `internal/engine` and the `Engines()`/`Lookup()` registry.
+- **Boundary enforcement** — the `depguard` rules in `.golangci.yml` (run by `scripts/check fast`): an engine does not import another engine, `internal/ui` or `internal/detect`; `ui` and `detect` do not import any `engines/*` package; `engine` and `dumpio` import no other project package. Shared code goes to `relational`, `docker` or `dumpio`, not across engines.
+- **Test substitution** — tests implement `Engine`/`Session` with fakes (e.g. `fakeEngine` in `internal/detect/detect_test.go`) instead of standing up a real container.
 
 ### The principles, as architecture rules
 

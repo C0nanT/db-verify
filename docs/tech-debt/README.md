@@ -4,21 +4,22 @@ Um módulo por revisão (skill `/tech-debt-map`). Os relatórios ficam em
 `.scratch/tech-debt-map/<módulo>/<data>.md`, que é material de trabalho. Este
 índice é versionado: registra quando cada módulo foi olhado pela última vez.
 
-O projeto é um único pacote `main`, sem módulos declarados. A partição abaixo
-é **proposta** e funciona como contrato: as próximas revisões medem cada
-módulo contra estes globs. Quando um corte se mostrar errado, renomeie ou
-redivida o módulo aqui, sem traçar uma linha nova em silêncio.
+Os módulos abaixo correspondem aos pacotes Go do projeto (ver
+`docs/adr/0001-monolito-modular.md`) e funcionam como contrato: as próximas
+revisões medem cada módulo contra estes globs. Quando um corte se mostrar
+errado, renomeie ou redivida o módulo aqui, sem traçar uma linha nova em
+silêncio.
 
 | Módulo | Paths | Origem | Última revisão | Relatório | Abertos |
 | ------ | ----- | ------ | -------------- | --------- | ------- |
-| core | `engine.go`, `relational.go`, `internal/docker/dockerhost.go`, `internal/docker/dockerhost_test.go`, `conformance_test.go` | proposed | 2026-09-29 | `.scratch/tech-debt-map/core/2026-09-29.md` | 9 |
-| detection | `detect.go`, `detect_test.go`, `dump_test.go`, `testdata/**` | proposed | — | — | — |
-| cli-ui | `main.go`, `picker.go`, `picker_test.go`, `tui.go`, `tui_test.go`, `port_flag_test.go` | proposed | — | — | — |
-| postgres | `engines/postgres/` | proposed | — | — | — |
-| mysql-family | `engines/mysql/` | proposed | — | — | — |
-| sqlite | `engines/sqlite/` | proposed | — | — | — |
-| redis | `engines/redis/` | proposed | — | — | — |
-| mongo | `engines/mongo/` | proposed | — | — | — |
+| core | `internal/engine/`, `internal/relational/`, `internal/docker/`, `internal/conformance/`, `conformance_test.go`, `engines.go` | pacotes | 2026-09-29 | `.scratch/tech-debt-map/core/2026-09-29.md` | 9 |
+| detection | `internal/detect/`, `internal/dumpio/`, `detect_test.go`, `dump_test.go`, `testdata/**` | pacotes | — | — | — |
+| cli-ui | `main.go`, `main_test.go`, `port_flag_test.go`, `internal/ui/` | pacotes | — | — | — |
+| postgres | `engines/postgres/` | pacotes | — | — | — |
+| mysql-family | `engines/mysql/` | pacotes | — | — | — |
+| sqlite | `engines/sqlite/` | pacotes | — | — | — |
+| redis | `engines/redis/` | pacotes | — | — | — |
+| mongo | `engines/mongo/` | pacotes | — | — | — |
 
 ## Guardrails
 
@@ -35,8 +36,10 @@ não a um módulo. A seção só cresce: acrescente, não reescreva.
   _(core, 2026-09-29)_
 - **CLI Docker só via `DockerHost`.** Depois da migração, código de engine
   novo não chama `exec.Command("docker", …)` direto. Candidato a checagem por
-  grep em `scripts/check fast`. _(core, 2026-09-29)_
+  grep em `scripts/check fast`; como o acesso ao Docker agora mora em
+  `internal/docker`, a checagem pode ser feita por pacote (grep em `engines/**` e
+  `internal/ui/**`, ou uma regra `depguard` sobre `os/exec`). _(core, 2026-09-29)_
 - **Regras compartilhadas entre engines moram no core com nome.** Heurística
   de ordenação, limite de "recentes" e janelas de porta ficam em constantes e
-  funções de `engine.go`/`relational.go`, não como literais repetidos por
+  funções de `internal/engine`/`internal/relational`, não como literais repetidos por
   engine. _(core, 2026-09-29)_

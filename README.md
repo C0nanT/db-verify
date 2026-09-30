@@ -128,19 +128,25 @@ a mais nova.
 
 ## Estrutura
 
-| arquivo | responsabilidade |
+Um binário, um `go.mod`; o código mora em pacotes Go. O compilador esconde o que é
+privado de cada pacote e a regra `depguard` (`.golangci.yml`) reprova importações na
+direção errada. As decisões estão em `docs/adr/0001-monolito-modular.md`.
+
+| pacote | responsabilidade |
 |---|---|
-| `main.go` | flags, orquestração, saída da fase de restore |
-| `engine.go` | interfaces `Engine`/`Session`, tipos compartilhados (`Match`, `Backup`, `Collection`, `Health`…) e o registro de engines |
-| `relational.go` | heurística de coluna de ordenação compartilhada entre as engines relacionais |
-| `detect.go` | detecção de formato genérica: descompressão do cabeçalho + disputa entre engines registradas |
+| `main` (raiz) | flags, roteiro `run()`, lista explícita de engines (`engines.go`) e testes do conjunto montado |
+| `internal/engine` | interfaces `Engine`/`Session`, tipos compartilhados (`Match`, `Backup`, `Collection`, `Health`…) e o registro de engines |
+| `internal/relational` | heurística de coluna de ordenação compartilhada entre as engines relacionais |
+| `internal/docker` | `DockerHost`: daemon, portas livres e retry por conflito de porta |
+| `internal/dumpio` | abre o backup descomprimindo gzip/zstd/bzip2 |
+| `internal/detect` | detecção de formato genérica: cabeçalho descomprimido + disputa entre engines registradas |
+| `internal/ui` | seletor interativo de backups em `data/` e interface bubbletea/lipgloss |
+| `internal/conformance` | registro de fixtures e helpers da suíte de conformidade (tag `docker`) e caminho de `testdata/headers/` |
 | `engines/postgres/` | engine PostgreSQL (`pg_restore`/`psql` via `pgx`) |
 | `engines/mysql/` | engines MySQL (`mysql`/`mysqldump` via `database/sql`) e MariaDB (reusa o container e a sessão do MySQL, imagem/binários `mariadb-*`) |
 | `engines/sqlite/` | engine SQLite (driver in-process, sem container) |
 | `engines/redis/` | engine Redis (RDB posicionado no datadir antes do `redis-server` subir) |
 | `engines/mongo/` | engine MongoDB (`mongorestore --archive`, achatamento de documentos aninhados) |
-| `picker.go` | seletor interativo de backups em `data/`, com a engine detectada de cada um |
-| `tui.go` | interface bubbletea/lipgloss |
 
 O container é sempre removido ao sair (inclusive em `ctrl+c`), a menos que use
 `--keep`. Ao encerrar, a string de conexão é impressa para reuso com o cliente
@@ -171,16 +177,20 @@ máquina.
 
 ## Como adicionar uma engine nova
 
-1. Criar um arquivo `<engine>.go` implementando `Engine` e `Session` (`engine.go`) —
-   `Detect`, `Expects` e `Provision` do lado de `Engine`; `Health`, `Collections`,
-   `Recent`, `Query`, `ConnectHint`, `Restore`, `Close` do lado de `Session`.
-2. Registrar em um `func init() { Register(xEngine{}) }` no mesmo arquivo — nenhum
-   outro arquivo do projeto precisa saber que a engine nova existe.
-3. Se a engine for relacional, reusar a heurística de `relational.go`
-   (`orderColumnTiers`, `orderHint`) em vez de reimplementar a ordem de preferência
+1. Criar um pacote `engines/<engine>/` implementando `Engine` e `Session`
+   (`internal/engine`) — `Detect`, `Expects` e `Provision` do lado de `Engine`;
+   `Health`, `Collections`, `Recent`, `Query`, `ConnectHint`, `Restore`, `Close` do
+   lado de `Session`. Uma engine não importa outra engine, `internal/ui` nem
+   `internal/detect` (o `depguard` reprova no `scripts/check fast`); código comum vai
+   para `internal/relational`, `internal/docker` ou `internal/dumpio`.
+2. Se a engine for relacional, reusar a heurística de `internal/relational`
+   (`OrderColumnTiers`, `ChooseOrderColumn`, `OrderHint`) em vez de reimplementar a ordem de preferência
    de coluna.
-4. Registrar uma `ConformanceFixture` (`conformance_test.go`) num
-   `<engine>_conformance_test.go`, descrevendo como gerar um backup mínimo válido e
-   um truncado/corrompido. A engine só está pronta quando passa na suíte de
-   conformidade genérica (`go test -tags docker ./...`) sem nenhuma exceção
-   específica de engine.
+3. Criar `engines/<engine>/conformance.go` com a build tag `docker`, cadastrando uma
+   `conformance.ConformanceFixture` (`conformance.Register`) que descreve como gerar
+   um backup mínimo válido e um truncado/corrompido. A engine só está pronta quando
+   passa na suíte de conformidade genérica (`go test -tags docker ./...`) sem nenhuma
+   exceção específica de engine; engine na lista sem fixture reprova a suíte.
+4. Adicionar a engine à lista explícita em `engines.go` (raiz). A ordem da lista
+   decide o desempate de detecção (mesma confiança): acrescente no fim, a menos que o
+   desempate desejado exija outra posição.
