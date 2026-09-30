@@ -34,6 +34,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"db-verify/internal/docker"
 )
 
 // redisEngine implementa Engine para Redis.
@@ -112,14 +114,14 @@ const redisDefaultPort = 6379
 // Redis só carrega o RDB durante a inicialização — colocar o arquivo depois
 // do start não faz efeito nenhum.
 func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(ctx); err != nil {
+	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 
 	version := redisResolveVersion(opts.VersionTag, b.Version)
 	port := opts.Port
 	if port == 0 {
-		port = freePortFrom(redisDefaultPort)
+		port = docker.FreePortFrom(redisDefaultPort)
 	}
 
 	cont := &redisContainer{
@@ -131,7 +133,7 @@ func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	if err := opts.Step(ctx, "criando container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		if err := cont.Create(ctx); err != nil {
 			return err

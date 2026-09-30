@@ -30,6 +30,8 @@ import (
 	"unicode/utf8"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"db-verify/internal/docker"
 )
 
 // mysqlEngine implementa Engine para MySQL.
@@ -116,14 +118,14 @@ func (mysqlEngine) Expects() string {
 // conecta — mesmo formato grosso de pgEngine.Provision, para o número de
 // seams continuar sendo um.
 func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(ctx); err != nil {
+	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 
 	version := mysqlResolveVersion(opts.VersionTag, b.Version)
 	port := opts.Port
 	if port == 0 {
-		port = freePortFrom(mysqlDefaultPort)
+		port = docker.FreePortFrom(mysqlDefaultPort)
 	}
 	db := opts.DBName
 	if db == "" {
@@ -140,7 +142,7 @@ func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
 	})

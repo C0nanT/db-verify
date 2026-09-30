@@ -25,6 +25,8 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	"db-verify/internal/docker"
 )
 
 // mariadbEngine implementa Engine para MariaDB.
@@ -84,14 +86,14 @@ func (mariadbEngine) Expects() string {
 // conecta — mesmo formato grosso das demais engines. Reusa mysqlContainer e
 // mysqlSession inteiros; só Image e Client mudam.
 func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(ctx); err != nil {
+	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 
 	version := mariadbResolveVersion(opts.VersionTag, b.Version)
 	port := opts.Port
 	if port == 0 {
-		port = freePortFrom(mysqlDefaultPort)
+		port = docker.FreePortFrom(mysqlDefaultPort)
 	}
 	db := opts.DBName
 	if db == "" {
@@ -108,7 +110,7 @@ func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpt
 	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
 	})

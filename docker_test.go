@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"db-verify/internal/docker"
 )
 
 const testSchemaSQL = `
@@ -189,7 +191,7 @@ func TestFullFlow_Postgres(t *testing.T) {
 
 	ctx := context.Background()
 	sess, err := eng.Provision(ctx, backup, ProvisionOpts{
-		Port: freePort(), Jobs: 4, DBName: "verify", ExactCounts: true,
+		Port: docker.FreePort(), Jobs: 4, DBName: "verify", ExactCounts: true,
 	})
 	if err != nil {
 		t.Fatalf("Provision: %v", err)
@@ -347,7 +349,7 @@ func TestContainerKeep(t *testing.T) {
 	cont := &pgContainer{
 		Name:  uniqueName("keep"),
 		Image: "postgres:16-alpine",
-		Port:  freePort(),
+		Port:  docker.FreePort(),
 		DB:    "verify",
 		User:  "postgres",
 		Pass:  "postgres",

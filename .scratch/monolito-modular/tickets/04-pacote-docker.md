@@ -8,9 +8,9 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seção "Pacotes", nota sobre helpers
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O pacote `docker` não importa nenhuma engine, `detect` nem `ui`.
-- [ ] Os testes do `DockerHost` moram no pacote `docker`, sem asserção alterada.
-- [ ] As funções globais exportadas têm comentário em pt-BR apontando para o achado 10 como o motivo de ainda existirem.
-- [ ] `./scripts/check full` passa.
+- [x] O pacote `docker` não importa nenhuma engine, `detect` nem `ui`.
+- [x] Os testes do `DockerHost` moram no pacote `docker`, sem asserção alterada.
+- [x] As funções globais exportadas têm comentário em pt-BR apontando para o achado 10 como o motivo de ainda existirem.
+- [x] `./scripts/check full` passa.

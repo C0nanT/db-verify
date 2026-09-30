@@ -13,11 +13,13 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"db-verify/internal/docker"
 )
 
 func requireDocker(t *testing.T) {
 	t.Helper()
-	if err := dockerAvailable(context.Background()); err != nil {
+	if err := docker.DockerAvailable(context.Background()); err != nil {
 		t.Skipf("docker indisponível: %v", err)
 	}
 }

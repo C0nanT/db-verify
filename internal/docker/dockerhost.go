@@ -1,10 +1,10 @@
-package main
-
-// Módulo de host Docker: scan de porta, parse de conflito, retry, rm do
-// nome fixo, docker ps na faixa, prompt ao operador e “daemon responde?”.
+// Pacote docker concentra o host Docker: scan de porta, parse de conflito,
+// retry, rm do nome fixo, docker ps na faixa, prompt ao operador e “daemon
+// responde?”.
 // Engines Docker chamam daqui; a policy Engine/Session não conhece CLI
 // Docker nem stdin. Produção usa exec + stdin/stderr reais; testes
 // substituem Run, o leitor do prompt e Listen.
+package docker
 
 import (
 	"bufio"
@@ -24,7 +24,7 @@ import (
 const postgresPortWindow = 55432
 
 // maxPortRetries é quantas portas seguidas StartWithPortRetry tenta antes de
-// oferecer ao operador derrubar um container. freePort/freePortFrom já
+// oferecer ao operador derrubar um container. FreePort/FreePortFrom já
 // evitam a maioria dos conflitos no host, mas resta a corrida entre o
 // listen e o docker publicar — e --port pula o scan.
 const maxPortRetries = 5
@@ -100,25 +100,46 @@ var defaultDockerHost = &DockerHost{}
 // bloquear o Provision para sempre.
 const dockerCheckTimeout = 10 * time.Second
 
-// dockerAvailable aplica dockerCheckTimeout sobre o ctx do Provision.
-func dockerAvailable(ctx context.Context) error {
+// DockerAvailable aplica dockerCheckTimeout sobre o ctx do Provision.
+//
+// Função global presa ao defaultDockerHost: só existe porque as engines
+// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
+// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
+// quando o achado 10 for tratado.
+func DockerAvailable(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, dockerCheckTimeout)
 	defer cancel()
 	return defaultDockerHost.Available(ctx)
 }
 
-// freePort procura uma porta livre a partir de 55432 (janela Postgres).
-func freePort() int {
+// FreePort procura uma porta livre a partir de 55432 (janela Postgres).
+//
+// Função global presa ao defaultDockerHost: só existe porque as engines
+// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
+// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
+// quando o achado 10 for tratado.
+func FreePort() int {
 	return defaultDockerHost.FreePortFrom(postgresPortWindow)
 }
 
-// freePortFrom procura a primeira porta livre a partir de start (inclusive),
+// FreePortFrom procura a primeira porta livre a partir de start (inclusive),
 // numa janela de 100 portas — porta padrão do engine quando estiver livre.
-func freePortFrom(start int) int {
+//
+// Função global presa ao defaultDockerHost: só existe porque as engines
+// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
+// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
+// quando o achado 10 for tratado.
+func FreePortFrom(start int) int {
 	return defaultDockerHost.FreePortFrom(start)
 }
 
-func startWithPortRetry(ctx context.Context, name string, startPort int, attempt func(port int) error) (int, error) {
+// StartWithPortRetry roda o retry por conflito de porta no defaultDockerHost.
+//
+// Função global presa ao defaultDockerHost: só existe porque as engines
+// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
+// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
+// quando o achado 10 for tratado.
+func StartWithPortRetry(ctx context.Context, name string, startPort int, attempt func(port int) error) (int, error) {
 	return defaultDockerHost.StartWithPortRetry(ctx, name, startPort, attempt)
 }
 

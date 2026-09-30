@@ -11,7 +11,7 @@ redivida o módulo aqui, sem traçar uma linha nova em silêncio.
 
 | Módulo | Paths | Origem | Última revisão | Relatório | Abertos |
 | ------ | ----- | ------ | -------------- | --------- | ------- |
-| core | `engine.go`, `relational.go`, `dockerhost.go`, `dockerhost_test.go`, `conformance_test.go` | proposed | 2026-09-29 | `.scratch/tech-debt-map/core/2026-09-29.md` | 9 |
+| core | `engine.go`, `relational.go`, `internal/docker/dockerhost.go`, `internal/docker/dockerhost_test.go`, `conformance_test.go` | proposed | 2026-09-29 | `.scratch/tech-debt-map/core/2026-09-29.md` | 9 |
 | detection | `detect.go`, `detect_test.go`, `dump_test.go`, `testdata/**` | proposed | — | — | — |
 | cli-ui | `main.go`, `picker.go`, `picker_test.go`, `tui.go`, `tui_test.go`, `port_flag_test.go` | proposed | — | — | — |
 | postgres | `postgres.go`, `postgres_conformance_test.go`, `db_test.go`, `docker_test.go` | proposed | — | — | — |

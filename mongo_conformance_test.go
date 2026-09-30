@@ -26,6 +26,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
+
+	"db-verify/internal/docker"
 )
 
 func init() {
@@ -99,7 +101,7 @@ func mongoConformanceSourceDump(t *testing.T) string {
 	ctx := context.Background()
 
 	srcName := uniqueName("conf-src-mongo")
-	port := freePortFrom(mongoDefaultPort)
+	port := docker.FreePortFrom(mongoDefaultPort)
 	out, err := exec.Command("docker", "run", "-d", "--name", srcName,
 		"-p", fmt.Sprintf("127.0.0.1:%d:27017", port),
 		"mongo:7.0").CombinedOutput()

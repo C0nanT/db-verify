@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"db-verify/internal/docker"
 )
 
 // pgEngine implementa Engine para PostgreSQL.
@@ -77,7 +79,7 @@ func (pgEngine) Expects() string {
 // um. opts.Progress, se houver, é chamado a cada fase para o chamador
 // imprimir o mesmo acompanhamento de sempre.
 func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(ctx); err != nil {
+	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 
@@ -90,7 +92,7 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 	}
 	port := opts.Port
 	if port == 0 {
-		port = freePort()
+		port = docker.FreePort()
 	}
 
 	cont := &pgContainer{
@@ -102,7 +104,7 @@ func (pgEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (S
 	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
 	})

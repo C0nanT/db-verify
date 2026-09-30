@@ -35,6 +35,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
+
+	"db-verify/internal/docker"
 )
 
 // mongoEngine implementa Engine para MongoDB.
@@ -133,14 +135,14 @@ var mongoSystemDBs = map[string]bool{"admin": true, "local": true, "config": tru
 // archive via mongorestore lendo de stdin (sem arquivo intermediário dentro
 // do container) e conecta — mesmo formato grosso das demais engines.
 func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	if err := dockerAvailable(ctx); err != nil {
+	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
 
 	version := resolveMongoVersion(opts.VersionTag, b.Version)
 	port := opts.Port
 	if port == 0 {
-		port = freePortFrom(mongoDefaultPort)
+		port = docker.FreePortFrom(mongoDefaultPort)
 	}
 
 	cont := &mongoContainer{
@@ -152,7 +154,7 @@ func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts)
 	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := startWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
 	})
