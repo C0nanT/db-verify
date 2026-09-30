@@ -137,8 +137,8 @@ a mais nova.
 | `postgres.go` | engine PostgreSQL (`pg_restore`/`psql` via `pgx`) |
 | `mysql.go` | engine MySQL (`mysql`/`mysqldump` via `database/sql`) |
 | `mariadb.go` | engine MariaDB (espelha `mysql.go`, imagem/binários `mariadb-*`) |
-| `sqlite.go` | engine SQLite (driver in-process, sem container) |
-| `redis.go` | engine Redis (RDB posicionado no datadir antes do `redis-server` subir) |
+| `engines/sqlite/` | engine SQLite (driver in-process, sem container) |
+| `engines/redis/` | engine Redis (RDB posicionado no datadir antes do `redis-server` subir) |
 | `mongo.go` | engine MongoDB (`mongorestore --archive`, achatamento de documentos aninhados) |
 | `picker.go` | seletor interativo de backups em `data/`, com a engine detectada de cada um |
 | `tui.go` | interface bubbletea/lipgloss |

@@ -248,7 +248,7 @@ func mongoRestoredDBs(ctx context.Context, client *mongo.Client) ([]string, erro
 
 // mongoContainer representa o container temporário usado para validar o
 // archive. Sem usuário/senha: servidor descartável e efêmero, igual à
-// escolha do Redis (redis.go) — o container só escuta em 127.0.0.1.
+// escolha do Redis (engines/redis/redis.go) — o container só escuta em 127.0.0.1.
 type mongoContainer struct {
 	Name  string
 	Image string
@@ -490,7 +490,7 @@ func mongoFlattenInto(doc bson.M, prefix string, depth int, out map[string]strin
 // canônico) do extended JSON — legível ("2024-01-01T00:00:00Z" em vez do
 // envelope {"$date":...}), mas ainda JSON de verdade. Erros de marshaling
 // (não deveriam ocorrer para valores que já vieram de um decode BSON válido)
-// viram "?" em vez de propagados, mesmo espírito de redis.go/previewValue:
+// viram "?" em vez de propagados, mesmo espírito de engines/redis/redis.go (previewValue):
 // é só uma preview, não pode derrubar a listagem inteira.
 func mongoCompactJSON(v any) string {
 	// MarshalExtJSON só aceita um documento na raiz — um bson.A (array)

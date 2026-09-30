@@ -1,13 +1,13 @@
 //go:build docker
 
-package main
+package redis
 
-// Fixture de conformidade da engine Redis (ver conformance_test.go): como
+// Fixture de conformidade da engine Redis (ver conformance_test.go, na raiz): como
 // gerar o backup mínimo válido e o backup truncado que TestEngineConformance
 // exige de toda engine registrada.
 //
 // O "backup mínimo com duas coleções, uma vazia" que as fixtures relacionais
-// seguem (postgres_conformance_test.go, mysql_conformance_test.go) não
+// seguem (postgres_conformance_test.go e mysql_conformance_test.go, na raiz) não
 // traduz para o Redis: uma "coleção" aqui é um grupo de chaves inferido por
 // prefixo (ticket 07), e um prefixo sem nenhuma chave simplesmente não
 // existe — SCAN não tem como descobri-lo. Em vez de forçar uma coleção

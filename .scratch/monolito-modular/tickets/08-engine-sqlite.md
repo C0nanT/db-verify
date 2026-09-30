@@ -10,11 +10,11 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seções "Pacotes", "Suíte de confor
 
 **Blocked by:** 02, 03, 05b, 07
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O pacote da engine importa só `engine`, `relational`, `docker` e (só nos arquivos com tag `docker`) `conformance` dentre os pacotes do projeto.
-- [ ] Nenhum arquivo dessa engine sobra na raiz.
-- [ ] A fixture de conformidade mora no pacote da engine, com tag `docker`, e a suíte genérica na raiz passa para essa engine.
-- [ ] A lista explícita do `main` mantém a ordem; `--list-engines` não muda.
-- [ ] Nenhuma asserção de teste existente foi alterada.
-- [ ] `./scripts/check full` passa.
+- [x] O pacote da engine importa só `engine`, `relational`, `docker` e (só nos arquivos com tag `docker`) `conformance` dentre os pacotes do projeto.
+- [x] Nenhum arquivo dessa engine sobra na raiz.
+- [x] A fixture de conformidade mora no pacote da engine, com tag `docker`, e a suíte genérica na raiz passa para essa engine.
+- [x] A lista explícita do `main` mantém a ordem; `--list-engines` não muda.
+- [x] Nenhuma asserção de teste existente foi alterada.
+- [x] `./scripts/check full` passa.

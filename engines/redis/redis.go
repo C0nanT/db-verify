@@ -1,4 +1,4 @@
-package main
+package redis
 
 // Implementação da engine Redis atrás da interface Engine/Session. É a
 // engine que mais tensiona o modelo genérico (ver ticket 07): não existe
@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"context"
 	"db-verify/internal/dumpio"
+	"db-verify/internal/engine"
 	"fmt"
 	"io"
 	"os"
@@ -39,10 +40,10 @@ import (
 	"db-verify/internal/docker"
 )
 
-// redisEngine implementa Engine para Redis.
-type redisEngine struct{}
+// Engine implementa Engine para Redis.
+type Engine struct{}
 
-func (redisEngine) Name() string { return "redis" }
+func (Engine) Name() string { return "redis" }
 
 // reRDBMagic reconhece o cabeçalho de um RDB: "REDIS" seguido de 4 dígitos
 // com a versão do *formato* do RDB (não a versão do servidor — ver
@@ -53,19 +54,19 @@ var reRDBMagic = regexp.MustCompile(`^REDIS(\d{4})`)
 // fallback de confiança média para a extensão .rdb — o cabeçalho já chega
 // aqui descomprimido (detect.go), então um .rdb.gz é reconhecido igual a um
 // .rdb puro.
-func (redisEngine) Detect(head []byte, path string) (Match, bool) {
+func (Engine) Detect(head []byte, path string) (engine.Match, bool) {
 	if mm := reRDBMagic.FindSubmatch(head); mm != nil {
-		return Match{Format: "rdb", Version: string(mm[1]), Confidence: ConfidenceMagic}, true
+		return engine.Match{Format: "rdb", Version: string(mm[1]), Confidence: engine.ConfidenceMagic}, true
 	}
 	if strings.HasSuffix(strings.ToLower(path), ".rdb") {
-		return Match{Format: "rdb", Confidence: ConfidenceExtension}, true
+		return engine.Match{Format: "rdb", Confidence: engine.ConfidenceExtension}, true
 	}
-	return Match{}, false
+	return engine.Match{}, false
 }
 
 // Expects descreve o que o Redis reconhece, para mensagens de erro e
 // --list-engines.
-func (redisEngine) Expects() string {
+func (Engine) Expects() string {
 	return `dumps .rdb: magic "REDIS" + versão do formato, ou extensão .rdb`
 }
 
@@ -114,7 +115,7 @@ const redisDefaultPort = 6379
 // de ordem em relação às outras engines (Start/CopyDump/Restore) porque o
 // Redis só carrega o RDB durante a inicialização — colocar o arquivo depois
 // do start não faz efeito nenhum.
-func (redisEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
+func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
@@ -257,7 +258,7 @@ func (c *redisContainer) StartContainer(ctx context.Context) error {
 // por isso, só nesse caso, passa por um arquivo temporário local (removido
 // ao final). RDBs tendem a ser bem menores que dumps relacionais
 // equivalentes, o que torna essa exceção aceitável.
-func (c *redisContainer) CopyDump(ctx context.Context, b *Backup) error {
+func (c *redisContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 	if b.Compression == "none" {
 		return c.streamDumpTar(ctx, b.Path, b.Size)
 	}
@@ -328,22 +329,22 @@ func (c *redisContainer) streamDumpTar(ctx context.Context, path string, size in
 // timeout: se o container morrer sozinho no meio do caminho (o sintoma de
 // um RDB inválido — ver testes de conformidade), a falha é detectada e
 // reportada com o log do container assim que isso acontece, não só depois
-// do timeout inteiro se esgotar. Devolve sempre um *RestoreResult, nunca um
+// do timeout inteiro se esgotar. Devolve sempre um *engine.RestoreResult, nunca um
 // erro — mesmo a falha de "não ficou pronto" é modelada como um restore com
 // erros (ver Provision), não como falha de Provision.
-func (c *redisContainer) WaitReady(ctx context.Context, timeout time.Duration) *RestoreResult {
+func (c *redisContainer) WaitReady(ctx context.Context, timeout time.Duration) *engine.RestoreResult {
 	start := time.Now()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if exec.CommandContext(ctx, "docker", "exec", c.Name, "redis-cli", "PING").Run() == nil {
-			return &RestoreResult{Duration: time.Since(start)}
+			return &engine.RestoreResult{Duration: time.Since(start)}
 		}
 		if !c.isRunning() {
 			return c.failureResult(start, "o container saiu sozinho antes de o Redis ficar pronto — RDB provavelmente inválido")
 		}
 		select {
 		case <-ctx.Done():
-			return &RestoreResult{Duration: time.Since(start), Errors: []string{ctx.Err().Error()}}
+			return &engine.RestoreResult{Duration: time.Since(start), Errors: []string{ctx.Err().Error()}}
 		case <-time.After(300 * time.Millisecond):
 		}
 	}
@@ -358,9 +359,9 @@ func (c *redisContainer) isRunning() bool {
 // failureResult monta o RestoreResult de uma falha de inicialização,
 // sempre com o log completo do container salvo em arquivo — é esse log,
 // não uma mensagem genérica de timeout, que diagnostica um RDB corrompido.
-func (c *redisContainer) failureResult(start time.Time, summary string) *RestoreResult {
+func (c *redisContainer) failureResult(start time.Time, summary string) *engine.RestoreResult {
 	logs, _ := exec.Command("docker", "logs", c.Name).CombinedOutput()
-	res := &RestoreResult{
+	res := &engine.RestoreResult{
 		Duration: time.Since(start),
 		Errors:   []string{summary},
 	}
@@ -445,7 +446,7 @@ type redisDescriptor struct {
 type redisSession struct {
 	client  *redis.Client
 	cont    *redisContainer
-	restore *RestoreResult
+	restore *engine.RestoreResult
 }
 
 // errNoConn descreve por que a sessão não tem conexão: o restore (a
@@ -545,7 +546,7 @@ func (s *redisSession) scanKeyspace(ctx context.Context, limit int64) (*redisKey
 // coisa para uma chave existente).
 var redisHealthTypes = []string{"string", "hash", "list", "set", "zset", "stream"}
 
-func (s *redisSession) Health(ctx context.Context) (*Health, error) {
+func (s *redisSession) Health(ctx context.Context) (*engine.Health, error) {
 	if s.client == nil {
 		return nil, s.errNoConn()
 	}
@@ -567,16 +568,16 @@ func (s *redisSession) Health(ctx context.Context) (*Health, error) {
 		return nil, err
 	}
 
-	fields := []HealthField{{Label: "chaves", Value: fmt.Sprint(dbSize)}} // DBSIZE é sempre exato no Redis (SPEC.md)
+	fields := []engine.HealthField{{Label: "chaves", Value: fmt.Sprint(dbSize)}} // DBSIZE é sempre exato no Redis (SPEC.md)
 	for _, typ := range redisHealthTypes {
-		fields = append(fields, HealthField{Label: typ, Value: fmt.Sprint(scan.TypeCounts[typ])})
+		fields = append(fields, engine.HealthField{Label: typ, Value: fmt.Sprint(scan.TypeCounts[typ])})
 	}
-	fields = append(fields, HealthField{Label: "com TTL", Value: fmt.Sprint(scan.WithTTL)})
+	fields = append(fields, engine.HealthField{Label: "com TTL", Value: fmt.Sprint(scan.WithTTL)})
 	if scan.Truncated {
-		fields = append(fields, HealthField{Label: "amostragem", Value: fmt.Sprintf("parcial (%d/%d chaves)", scan.Scanned, dbSize)})
+		fields = append(fields, engine.HealthField{Label: "amostragem", Value: fmt.Sprintf("parcial (%d/%d chaves)", scan.Scanned, dbSize)})
 	}
 
-	return &Health{Name: "db0", Size: used, Fields: fields}, nil
+	return &engine.Health{Name: "db0", Size: used, Fields: fields}, nil
 }
 
 // parseRedisInfoField lê um campo "chave:valor\r\n" da saída de INFO.
@@ -594,7 +595,7 @@ func parseRedisInfoField(info, field string) string {
 // varre só redisSampleScanLimit e extrapola por DBSIZE — o equivalente do
 // Redis a "contagem estimada" (--no-counts), já que não existe um
 // n_live_tup/TABLE_ROWS para grupos que não são uma entidade do servidor.
-func (s *redisSession) Collections(ctx context.Context, exact bool) ([]Collection, error) {
+func (s *redisSession) Collections(ctx context.Context, exact bool) ([]engine.Collection, error) {
 	if s.client == nil {
 		return nil, s.errNoConn()
 	}
@@ -611,14 +612,14 @@ func (s *redisSession) Collections(ctx context.Context, exact bool) ([]Collectio
 		return nil, err
 	}
 
-	var out []Collection
+	var out []engine.Collection
 	for group, count := range scan.Groups {
 		n := count
 		if scan.Truncated && scan.Scanned > 0 {
 			n = int64(float64(count) / float64(scan.Scanned) * float64(dbSize))
 		}
 		_, nativeCmd := redisGroupPattern(group)
-		out = append(out, Collection{
+		out = append(out, engine.Collection{
 			Name:       group,
 			Count:      n,
 			Hint:       redisHint(scan.Truncated),
@@ -642,7 +643,7 @@ func redisHint(truncated bool) string {
 // decrescente antes de aplicar o limite de 20: determinístico, e alinhado
 // com a convenção real mais comum de nomear chaves com um sufixo crescente
 // (id, timestamp) — a chave "maior" tende a ser a mais nova.
-func (s *redisSession) Recent(ctx context.Context, c Collection) (*ResultSet, error) {
+func (s *redisSession) Recent(ctx context.Context, c engine.Collection) (*engine.ResultSet, error) {
 	if s.client == nil {
 		return nil, s.errNoConn()
 	}
@@ -650,7 +651,7 @@ func (s *redisSession) Recent(ctx context.Context, c Collection) (*ResultSet, er
 	return s.sampleGroup(ctx, d.Group)
 }
 
-func (s *redisSession) sampleGroup(ctx context.Context, group string) (*ResultSet, error) {
+func (s *redisSession) sampleGroup(ctx context.Context, group string) (*engine.ResultSet, error) {
 	start := time.Now()
 	pattern, nativeCmd := redisGroupPattern(group)
 	noPrefix := group == redisNoPrefixGroup
@@ -683,7 +684,7 @@ func (s *redisSession) sampleGroup(ctx context.Context, group string) (*ResultSe
 		keys = keys[:redisRecentSampleSize]
 	}
 
-	rs := &ResultSet{Columns: []string{"chave", "tipo", "ttl", "preview"}, Query: nativeCmd, Language: "redis"}
+	rs := &engine.ResultSet{Columns: []string{"chave", "tipo", "ttl", "preview"}, Query: nativeCmd, Language: "redis"}
 	meta, err := s.fetchKeyMeta(ctx, keys)
 	if err != nil {
 		return nil, err
@@ -804,10 +805,10 @@ func splitRedisCmd(raw string) []string {
 
 // Query roda um comando nativo arbitrário via client.Do — a mesma interface
 // genérica que a suíte de conformidade usa para "comando válido"/"comando
-// inválido" (ver redis_conformance_test.go). Não há UI para digitar
+// inválido" (ver conformance.go). Não há UI para digitar
 // consulta livre nesta entrega (SPEC.md, "Fora do escopo"); a interface
 // existe e é usada internamente e pelos testes.
-func (s *redisSession) Query(ctx context.Context, raw string) (*ResultSet, error) {
+func (s *redisSession) Query(ctx context.Context, raw string) (*engine.ResultSet, error) {
 	if s.client == nil {
 		return nil, s.errNoConn()
 	}
@@ -825,7 +826,7 @@ func (s *redisSession) Query(ctx context.Context, raw string) (*ResultSet, error
 	if err != nil {
 		return nil, err
 	}
-	rs := &ResultSet{Query: raw, Language: "redis", Columns: []string{"resultado"}, Elapsed: time.Since(start)}
+	rs := &engine.ResultSet{Query: raw, Language: "redis", Columns: []string{"resultado"}, Elapsed: time.Since(start)}
 	for _, line := range redisFormatResult(res) {
 		rs.Rows = append(rs.Rows, []string{line})
 	}
@@ -854,8 +855,8 @@ func redisFormatResult(v any) []string {
 	}
 }
 
-func (s *redisSession) ConnectHint() ConnectHint {
-	return ConnectHint{
+func (s *redisSession) ConnectHint() engine.ConnectHint {
+	return engine.ConnectHint{
 		Name:      s.cont.Name,
 		DSN:       fmt.Sprintf("redis://%s/0", s.cont.Addr()),
 		Shell:     fmt.Sprintf("redis-cli -p %d", s.cont.Port),
@@ -865,7 +866,7 @@ func (s *redisSession) ConnectHint() ConnectHint {
 	}
 }
 
-func (s *redisSession) Restore() *RestoreResult { return s.restore }
+func (s *redisSession) Restore() *engine.RestoreResult { return s.restore }
 
 func (s *redisSession) Close() error {
 	if s.client != nil {
@@ -873,4 +874,20 @@ func (s *redisSession) Close() error {
 	}
 	s.cont.Remove()
 	return nil
+}
+
+// truncate corta s em w runas, terminando em "…" quando precisa cortar. Cópia
+// privada: engines não importam o main nem a interface, onde há outras cópias.
+func truncate(s string, w int) string {
+	r := []rune(s)
+	if w <= 0 {
+		return ""
+	}
+	if len(r) <= w {
+		return s
+	}
+	if w == 1 {
+		return "…"
+	}
+	return string(r[:w-1]) + "…"
 }

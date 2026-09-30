@@ -1,64 +1,27 @@
-package main
+package redis
 
 // Testes de detecção e das partes de redis.go que não dependem de um Redis
 // vivo (Camada 1 — sem Docker). A suíte de conformidade
-// (redis_conformance_test.go) cobre o resto do contrato Engine/Session
+// (conformance.go, com tag docker) cobre o resto do contrato Engine/Session
 // contra um Redis de verdade.
 
 import (
 	"testing"
 	"time"
+
+	"db-verify/internal/engine"
 )
-
-// TestRedisDetect_Magic caracteriza o reconhecimento pelo magic "REDIS" +
-// versão do formato, usando um dump.rdb real (testdata/headers/redis.rdb).
-func TestRedisDetect_Magic(t *testing.T) {
-	info, err := InspectDump("testdata/headers/redis.rdb")
-	if err != nil {
-		t.Fatalf("InspectDump: %v", err)
-	}
-	if info.Engine != "redis" {
-		t.Fatalf("Engine = %q, want redis", info.Engine)
-	}
-	if info.Format != "rdb" {
-		t.Errorf("Format = %q, want rdb", info.Format)
-	}
-	if info.Guessed {
-		t.Errorf("esperava Guessed=false para magic bytes")
-	}
-	if info.Version != "0012" {
-		t.Errorf("Version = %q, want 0012", info.Version)
-	}
-}
-
-// TestRedisDetect_Gzip caracteriza a detecção através de gzip: o cabeçalho é
-// descomprimido antes de a engine olhar para ele.
-func TestRedisDetect_Gzip(t *testing.T) {
-	info, err := InspectDump("testdata/headers/redis.rdb.gz")
-	if err != nil {
-		t.Fatalf("InspectDump: %v", err)
-	}
-	if info.Compression != "gzip" {
-		t.Errorf("Compression = %q, want gzip", info.Compression)
-	}
-	if info.Engine != "redis" {
-		t.Errorf("Engine = %q, want redis", info.Engine)
-	}
-	if info.Version != "0012" {
-		t.Errorf("Version = %q, want 0012", info.Version)
-	}
-}
 
 // TestRedisDetect_ExtensaoSemMagic caracteriza o fallback de confiança
 // média por extensão .rdb, quando o conteúdo não começa com o magic REDIS
 // (ex.: cabeçalho cortado bem no início por um backup truncado).
 func TestRedisDetect_ExtensaoSemMagic(t *testing.T) {
-	m, ok := redisEngine{}.Detect([]byte("lixo qualquer"), "backup.rdb")
+	m, ok := Engine{}.Detect([]byte("lixo qualquer"), "backup.rdb")
 	if !ok {
 		t.Fatal("esperava a engine redis reconhecer .rdb mesmo sem magic")
 	}
-	if m.Confidence != ConfidenceExtension {
-		t.Errorf("Confidence = %d, want %d (ConfidenceExtension)", m.Confidence, ConfidenceExtension)
+	if m.Confidence != engine.ConfidenceExtension {
+		t.Errorf("Confidence = %d, want %d (engine.ConfidenceExtension)", m.Confidence, engine.ConfidenceExtension)
 	}
 	if m.Format != "rdb" {
 		t.Errorf("Format = %q, want rdb", m.Format)
@@ -69,7 +32,7 @@ func TestRedisDetect_ExtensaoSemMagic(t *testing.T) {
 // sem extensão .rdb, a engine Redis não reivindica o arquivo — evita que
 // ela vire uma engine "pega-tudo" competindo com o palpite do Postgres.
 func TestRedisDetect_NaoReconhece(t *testing.T) {
-	_, ok := redisEngine{}.Detect([]byte("PGDMP qualquer coisa"), "arquivo.dump")
+	_, ok := Engine{}.Detect([]byte("PGDMP qualquer coisa"), "arquivo.dump")
 	if ok {
 		t.Fatal("esperava a engine redis não reconhecer conteúdo sem sinal nenhum")
 	}

@@ -16,8 +16,8 @@ redivida o módulo aqui, sem traçar uma linha nova em silêncio.
 | cli-ui | `main.go`, `picker.go`, `picker_test.go`, `tui.go`, `tui_test.go`, `port_flag_test.go` | proposed | — | — | — |
 | postgres | `postgres.go`, `postgres_conformance_test.go`, `db_test.go`, `docker_test.go` | proposed | — | — | — |
 | mysql-family | `mysql*.go`, `mariadb*.go` | proposed | — | — | — |
-| sqlite | `sqlite*.go` | proposed | — | — | — |
-| redis | `redis*.go` | proposed | — | — | — |
+| sqlite | `engines/sqlite/` | proposed | — | — | — |
+| redis | `engines/redis/` | proposed | — | — | — |
 | mongo | `mongo*.go` | proposed | — | — | — |
 
 ## Guardrails

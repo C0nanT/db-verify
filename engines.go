@@ -1,5 +1,10 @@
 package main
 
+import (
+	"db-verify/engines/redis"
+	"db-verify/engines/sqlite"
+)
+
 // Esta é a única lista de engines do binário. A ordem importa:
 // no desempate de detecção (mesma confiança), vence a engine que aparece
 // primeiro aqui. Mantenha-a estável ao adicionar engines novas (no fim, ou
@@ -13,8 +18,8 @@ var _ = registrarEngines(
 	mongoEngine{},
 	mysqlEngine{},
 	pgEngine{},
-	redisEngine{},
-	sqliteEngine{},
+	redis.Engine{},
+	sqlite.Engine{},
 )
 
 func registrarEngines(engines ...Engine) struct{} {
