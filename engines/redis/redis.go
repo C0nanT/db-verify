@@ -97,7 +97,7 @@ const defaultRedisVersion = "7.4"
 // redisResolveVersion decide a tag da imagem: --version-tag explícito
 // primeiro, depois a versão do RDB traduzida por rdbVersionToRedisTag, e só
 // então o fallback. Extraída à parte de Provision para ser testável sem
-// Docker (mesmo padrão de resolveMySQLFamilyVersion, mysql.go).
+// Docker (mesmo padrão de resolveMySQLFamilyVersion, engines/mysql/mysql.go).
 func redisResolveVersion(versionTag, rdbVersion string) string {
 	if versionTag != "" {
 		return versionTag
@@ -249,7 +249,7 @@ func (c *redisContainer) StartContainer(ctx context.Context) error {
 // CopyDump posiciona o backup como /data/dump.rdb (dir e nome default do
 // Redis) num container que ainda não subiu. Isso descarta a técnica das
 // demais engines (`docker exec ... sh -c "cat > arquivo"`, postgres.go/
-// mysql.go): não há processo para executar num container
+// engines/mysql/mysql.go): não há processo para executar num container
 // parado. Em vez disso, `docker cp -` aceita um stream tar via stdin mesmo
 // com o container parado. Para o caso comum (sem compressão) isso é feito
 // por streaming puro, sem tocar disco no host; um RDB comprimido precisa

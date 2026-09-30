@@ -1,4 +1,4 @@
-package main
+package mysql
 
 // Implementação da engine MySQL atrás da interface Engine/Session. Toda a
 // variação específica de MySQL (mysqldump texto, information_schema,
@@ -10,7 +10,7 @@ package main
 // depender de CTE/window functions (que exigem 8.0+, e o backup pode ser de
 // um 5.7).
 //
-// mariadbEngine (mariadb.go) reusa inteiramente mysqlContainer e
+// MariaDBEngine (mariadb.go) reusa inteiramente mysqlContainer e
 // mysqlSession — protocolo de fio, information_schema e heurística de coluna
 // são idênticos entre as duas engines — variando só Image e Client
 // (mysqlContainer.Client) e a versão default de imagem. Não há duplicação da
@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"db-verify/internal/dumpio"
 	"db-verify/internal/engine"
+	"db-verify/internal/relational"
 	"fmt"
 	"io"
 	"os"
@@ -36,10 +37,10 @@ import (
 	"db-verify/internal/docker"
 )
 
-// mysqlEngine implementa Engine para MySQL.
-type mysqlEngine struct{}
+// Engine implementa Engine para MySQL.
+type Engine struct{}
 
-func (mysqlEngine) Name() string { return "mysql" }
+func (Engine) Name() string { return "mysql" }
 
 var (
 	// reMySQLDumpHeader reconhece o cabeçalho de texto que o mysqldump
@@ -91,9 +92,9 @@ func mysqlResolveVersion(versionTag, backupVersion string) string {
 // "Distrib" quando ausente) e banco de origem da linha "-- Host: ...
 // Database: ...". Sem cabeçalho reconhecível, a extensão .sql ainda conta
 // como sinal de confiança média (SPEC.md, tabela de assinaturas).
-func (mysqlEngine) Detect(head []byte, path string) (Match, bool) {
+func (Engine) Detect(head []byte, path string) (engine.Match, bool) {
 	if reMySQLDumpHeader.Match(head) {
-		m := Match{Format: "sql", Confidence: ConfidenceMagic}
+		m := engine.Match{Format: "sql", Confidence: engine.ConfidenceMagic}
 		if mm := reMySQLFamilyServerVer.FindSubmatch(head); mm != nil {
 			m.Version = string(mm[1])
 		} else if mm := reMySQLFamilyDistribVer.FindSubmatch(head); mm != nil {
@@ -105,21 +106,21 @@ func (mysqlEngine) Detect(head []byte, path string) (Match, bool) {
 		return m, true
 	}
 	if strings.HasSuffix(strings.ToLower(path), ".sql") {
-		return Match{Format: "sql", Confidence: ConfidenceExtension}, true
+		return engine.Match{Format: "sql", Confidence: engine.ConfidenceExtension}, true
 	}
-	return Match{}, false
+	return engine.Match{}, false
 }
 
 // Expects descreve o que o MySQL reconhece, para mensagens de erro e
 // --list-engines.
-func (mysqlEngine) Expects() string {
+func (Engine) Expects() string {
 	return "dumps do mysqldump: cabeçalho \"-- MySQL dump\", ou extensão .sql"
 }
 
 // Provision sobe o container, espera ficar pronto, copia o dump, restaura e
 // conecta — mesmo formato grosso de pgEngine.Provision, para o número de
 // seams continuar sendo um.
-func (mysqlEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
+func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
@@ -297,7 +298,7 @@ func (c *mysqlContainer) WaitReady(ctx context.Context, timeout time.Duration) e
 
 // CopyDump joga o arquivo dentro do container, descomprimindo se preciso —
 // sempre por stream, nunca duplicando o dump inteiro em disco no host.
-func (c *mysqlContainer) CopyDump(ctx context.Context, b *Backup) error {
+func (c *mysqlContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 	if b.Compression == "none" {
 		out, err := exec.CommandContext(ctx, "docker", "cp", b.Path, c.Name+":/tmp/backup.sql").CombinedOutput()
 		if err != nil {
@@ -337,12 +338,12 @@ var reMySQLFamilyRestoreErr = regexp.MustCompile(`(?m)^ERROR\b`)
 // copiado, com --force para não abortar no primeiro erro (equivalente ao
 // ON_ERROR_STOP=0 do Postgres para dumps plain) — assim um backup truncado
 // produz todos os erros, não só o primeiro.
-func (c *mysqlContainer) Restore(ctx context.Context) (*RestoreResult, error) {
+func (c *mysqlContainer) Restore(ctx context.Context) (*engine.RestoreResult, error) {
 	start := time.Now()
 	shell := fmt.Sprintf("%s --force -u%s -p%s %s < /tmp/backup.sql", c.Client, c.User, c.Pass, c.DB)
 	out, err := exec.CommandContext(ctx, "docker", "exec", c.Name, "sh", "-c", shell).CombinedOutput()
 
-	res := &RestoreResult{Duration: time.Since(start)}
+	res := &engine.RestoreResult{Duration: time.Since(start)}
 	if ee, ok := err.(*exec.ExitError); ok {
 		res.ExitCode = ee.ExitCode()
 	} else if err != nil {
@@ -386,11 +387,11 @@ var mysqlDateTypes = map[string]bool{"timestamp": true, "datetime": true, "date"
 // chooseOrderColumn aplica a heurística compartilhada (relational.go) às
 // colunas de uma tabela MySQL/MariaDB, com os tipos de data de mysqlDateTypes.
 func chooseOrderColumn(cols []mysqlColumn, pk string) (orderCol string, byDate bool) {
-	return chooseRelationalOrderColumn(cols, pk, mysqlDateTypes)
+	return relational.ChooseOrderColumn(cols, pk, mysqlDateTypes)
 }
 
 // mysqlDescriptor é o Descriptor opaco que Collections anexa a cada
-// Collection e que Recent usa para montar o SELECT — só a engine MySQL sabe
+// engine.Collection e que Recent usa para montar o SELECT — só a engine MySQL sabe
 // o que esses campos significam.
 type mysqlDescriptor struct {
 	OrderCol string
@@ -413,7 +414,7 @@ func mysqlRecentQuery(db, table string, d mysqlDescriptor) string {
 type mysqlSession struct {
 	db      *sql.DB
 	cont    *mysqlContainer
-	restore *RestoreResult
+	restore *engine.RestoreResult
 }
 
 const mysqlHealthSQL = `SELECT DATABASE(),
@@ -425,7 +426,7 @@ const mysqlHealthSQL = `SELECT DATABASE(),
   (SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = DATABASE()),
   (SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = DATABASE())`
 
-func (s *mysqlSession) Health(ctx context.Context) (*Health, error) {
+func (s *mysqlSession) Health(ctx context.Context) (*engine.Health, error) {
 	var name string
 	var sizeBytes int64
 	var tables, views, indexes, fks, procs, triggers int
@@ -434,10 +435,10 @@ func (s *mysqlSession) Health(ctx context.Context) (*Health, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Health{
+	return &engine.Health{
 		Name: name,
 		Size: engine.HumanSize(sizeBytes),
-		Fields: []HealthField{
+		Fields: []engine.HealthField{
 			{Label: "tabelas", Value: fmt.Sprint(tables)},
 			{Label: "views", Value: fmt.Sprint(views)},
 			{Label: "índices", Value: fmt.Sprint(indexes)},
@@ -450,7 +451,7 @@ func (s *mysqlSession) Health(ctx context.Context) (*Health, error) {
 
 // mysqlColumn é a coluna neutra da heurística compartilhada; o alias mantém
 // os chamadores do MySQL/MariaDB como estão.
-type mysqlColumn = relationalColumn
+type mysqlColumn = relational.Column
 
 const mysqlTablesSQL = `SELECT table_name, table_rows, data_length + index_length
 FROM information_schema.tables
@@ -473,7 +474,7 @@ WHERE k.table_schema = DATABASE() AND t.constraint_type = 'PRIMARY KEY'
 GROUP BY k.table_name
 HAVING COUNT(*) = 1`
 
-func (s *mysqlSession) Collections(ctx context.Context, exact bool) ([]Collection, error) {
+func (s *mysqlSession) Collections(ctx context.Context, exact bool) ([]engine.Collection, error) {
 	columnsByTable := map[string][]mysqlColumn{}
 	crows, err := s.db.QueryContext(ctx, mysqlColumnsSQL)
 	if err != nil {
@@ -518,7 +519,7 @@ func (s *mysqlSession) Collections(ctx context.Context, exact bool) ([]Collectio
 	}
 	defer trows.Close()
 
-	var out []Collection
+	var out []engine.Collection
 	for trows.Next() {
 		var table string
 		var estRows sql.NullInt64
@@ -538,12 +539,12 @@ func (s *mysqlSession) Collections(ctx context.Context, exact bool) ([]Collectio
 
 		orderCol, byDate := chooseOrderColumn(columnsByTable[table], pkByTable[table])
 		d := mysqlDescriptor{OrderCol: orderCol, ByDate: byDate}
-		out = append(out, Collection{
+		out = append(out, engine.Collection{
 			Namespace:  s.cont.DB,
 			Name:       table,
 			Count:      count,
 			Size:       engine.HumanSize(sizeBytes.Int64),
-			Hint:       orderHint(orderCol, byDate),
+			Hint:       relational.OrderHint(orderCol, byDate),
 			Preview:    mysqlRecentQuery(s.cont.DB, table, d),
 			Descriptor: d,
 		})
@@ -551,16 +552,16 @@ func (s *mysqlSession) Collections(ctx context.Context, exact bool) ([]Collectio
 	return out, trows.Err()
 }
 
-func (s *mysqlSession) Recent(ctx context.Context, c Collection) (*ResultSet, error) {
+func (s *mysqlSession) Recent(ctx context.Context, c engine.Collection) (*engine.ResultSet, error) {
 	d, _ := c.Descriptor.(mysqlDescriptor)
 	return s.runQuery(ctx, mysqlRecentQuery(s.cont.DB, c.Name, d))
 }
 
-func (s *mysqlSession) Query(ctx context.Context, raw string) (*ResultSet, error) {
+func (s *mysqlSession) Query(ctx context.Context, raw string) (*engine.ResultSet, error) {
 	return s.runQuery(ctx, raw)
 }
 
-func (s *mysqlSession) runQuery(ctx context.Context, query string) (*ResultSet, error) {
+func (s *mysqlSession) runQuery(ctx context.Context, query string) (*engine.ResultSet, error) {
 	start := time.Now()
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -572,7 +573,7 @@ func (s *mysqlSession) runQuery(ctx context.Context, query string) (*ResultSet, 
 	if err != nil {
 		return nil, err
 	}
-	rs := &ResultSet{Query: query, Language: "sql", Columns: cols}
+	rs := &engine.ResultSet{Query: query, Language: "sql", Columns: cols}
 
 	vals := make([]any, len(cols))
 	ptrs := make([]any, len(cols))
@@ -596,9 +597,9 @@ func (s *mysqlSession) runQuery(ctx context.Context, query string) (*ResultSet, 
 	return rs, nil
 }
 
-func (s *mysqlSession) ConnectHint() ConnectHint {
+func (s *mysqlSession) ConnectHint() engine.ConnectHint {
 	shell := fmt.Sprintf("%s -h127.0.0.1 -P%d -u%s -p%s %s", s.cont.Client, s.cont.Port, s.cont.User, s.cont.Pass, s.cont.DB)
-	return ConnectHint{
+	return engine.ConnectHint{
 		Name:      s.cont.Name,
 		DSN:       s.cont.DSN(),
 		Shell:     shell,
@@ -608,7 +609,7 @@ func (s *mysqlSession) ConnectHint() ConnectHint {
 	}
 }
 
-func (s *mysqlSession) Restore() *RestoreResult { return s.restore }
+func (s *mysqlSession) Restore() *engine.RestoreResult { return s.restore }
 
 func (s *mysqlSession) Close() error {
 	s.db.Close()

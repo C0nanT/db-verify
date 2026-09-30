@@ -15,7 +15,7 @@ redivida o módulo aqui, sem traçar uma linha nova em silêncio.
 | detection | `detect.go`, `detect_test.go`, `dump_test.go`, `testdata/**` | proposed | — | — | — |
 | cli-ui | `main.go`, `picker.go`, `picker_test.go`, `tui.go`, `tui_test.go`, `port_flag_test.go` | proposed | — | — | — |
 | postgres | `postgres.go`, `postgres_conformance_test.go`, `db_test.go`, `docker_test.go` | proposed | — | — | — |
-| mysql-family | `mysql*.go`, `mariadb*.go` | proposed | — | — | — |
+| mysql-family | `engines/mysql/` | proposed | — | — | — |
 | sqlite | `engines/sqlite/` | proposed | — | — | — |
 | redis | `engines/redis/` | proposed | — | — | — |
 | mongo | `engines/mongo/` | proposed | — | — | — |

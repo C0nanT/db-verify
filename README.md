@@ -135,8 +135,7 @@ a mais nova.
 | `relational.go` | heurística de coluna de ordenação compartilhada entre as engines relacionais |
 | `detect.go` | detecção de formato genérica: descompressão do cabeçalho + disputa entre engines registradas |
 | `postgres.go` | engine PostgreSQL (`pg_restore`/`psql` via `pgx`) |
-| `mysql.go` | engine MySQL (`mysql`/`mysqldump` via `database/sql`) |
-| `mariadb.go` | engine MariaDB (espelha `mysql.go`, imagem/binários `mariadb-*`) |
+| `engines/mysql/` | engines MySQL (`mysql`/`mysqldump` via `database/sql`) e MariaDB (reusa o container e a sessão do MySQL, imagem/binários `mariadb-*`) |
 | `engines/sqlite/` | engine SQLite (driver in-process, sem container) |
 | `engines/redis/` | engine Redis (RDB posicionado no datadir antes do `redis-server` subir) |
 | `engines/mongo/` | engine MongoDB (`mongorestore --archive`, achatamento de documentos aninhados) |

@@ -1,4 +1,4 @@
-package main
+package mysql
 
 // Implementação da engine MariaDB. É deliberadamente um arquivo fino: todo o
 // container, a sessão, a heurística de coluna de ordenação e as consultas de
@@ -27,12 +27,13 @@ import (
 	"time"
 
 	"db-verify/internal/docker"
+	"db-verify/internal/engine"
 )
 
-// mariadbEngine implementa Engine para MariaDB.
-type mariadbEngine struct{}
+// MariaDBEngine implementa Engine para MariaDB.
+type MariaDBEngine struct{}
 
-func (mariadbEngine) Name() string { return "mariadb" }
+func (MariaDBEngine) Name() string { return "mariadb" }
 
 // reMariaDBDumpHeader reconhece o cabeçalho de texto que o mariadb-dump
 // sempre escreve na primeira linha — "-- MariaDB dump", distinto do "--
@@ -59,11 +60,11 @@ func mariadbResolveVersion(versionTag, backupVersion string) string {
 // do MySQL (reMySQLFamilyServerVer/reMySQLFamilyDistribVer/
 // reMySQLFamilyDatabaseLine, mysql.go) — o formato das linhas de metadado é
 // idêntico, só o texto de identificação do cabeçalho muda.
-func (mariadbEngine) Detect(head []byte, path string) (Match, bool) {
+func (MariaDBEngine) Detect(head []byte, path string) (engine.Match, bool) {
 	if !reMariaDBDumpHeader.Match(head) {
-		return Match{}, false
+		return engine.Match{}, false
 	}
-	m := Match{Format: "sql", Confidence: ConfidenceMagic}
+	m := engine.Match{Format: "sql", Confidence: engine.ConfidenceMagic}
 	if mm := reMySQLFamilyServerVer.FindSubmatch(head); mm != nil {
 		m.Version = string(mm[1])
 	} else if mm := reMySQLFamilyDistribVer.FindSubmatch(head); mm != nil {
@@ -78,14 +79,14 @@ func (mariadbEngine) Detect(head []byte, path string) (Match, bool) {
 // Expects descreve o que o MariaDB reconhece, para mensagens de erro e
 // --list-engines. Sem extensão: um .sql sem cabeçalho reconhecível é
 // atribuído ao MySQL (ambiguidade documentada em SPEC.md), não ao MariaDB.
-func (mariadbEngine) Expects() string {
+func (MariaDBEngine) Expects() string {
 	return `dumps do mariadb-dump: cabeçalho "-- MariaDB dump" (sem fallback de extensão — .sql sem cabeçalho vai para o MySQL)`
 }
 
 // Provision sobe o container, espera ficar pronto, copia o dump, restaura e
 // conecta — mesmo formato grosso das demais engines. Reusa mysqlContainer e
 // mysqlSession inteiros; só Image e Client mudam.
-func (mariadbEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
+func (MariaDBEngine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}

@@ -207,7 +207,7 @@ func (c *pgContainer) Start(ctx context.Context) error {
 // reinicia para o servidor real; um pg_isready bem-sucedido contra o
 // temporário dá falso positivo (o restore em seguida falha com "No such
 // file or directory" no socket, no meio do reinício). A segunda checagem,
-// mesmo padrão do MySQL/MariaDB (ver mysql.go), evita isso.
+// mesmo padrão do MySQL/MariaDB (ver engines/mysql/mysql.go), evita isso.
 func (c *pgContainer) WaitReady(ctx context.Context, timeout time.Duration) error {
 	check := func() bool {
 		return exec.CommandContext(ctx, "docker", "exec", c.Name,

@@ -117,7 +117,7 @@ const defaultMongoVersion = "7.0"
 // resolveMongoVersion decide a tag da imagem: --version-tag explícito
 // primeiro, depois a versão extraída do archive (já normalizada para
 // major.minor por Detect), e só então o fallback — mesma ordem de precedência
-// das demais engines (ver resolveMySQLFamilyVersion, mysql.go).
+// das demais engines (ver resolveMySQLFamilyVersion, engines/mysql/mysql.go).
 func resolveMongoVersion(versionTag, backupVersion string) string {
 	if versionTag != "" {
 		return versionTag
@@ -508,7 +508,7 @@ func mongoCompactJSON(v any) string {
 }
 
 // mongoFormatScalar formata um valor-folha (não documento, não array) —
-// mesmo espírito de formatValue (postgres.go) e mysqlFormatValue (mysql.go):
+// mesmo espírito de formatValue (postgres.go) e mysqlFormatValue (engines/mysql/mysql.go):
 // nulo/data/binário/string recebem tratamento explícito, o resto cai no
 // %v genérico.
 func mongoFormatScalar(v any) string {

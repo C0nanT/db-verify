@@ -1,14 +1,14 @@
 //go:build docker
 
-package main
+package mysql
 
-// Fixture de conformidade da engine MariaDB (ver conformance_test.go): como
+// Fixture de conformidade da engine MariaDB (ver conformance_test.go, na raiz): como
 // gerar o backup mínimo válido e o backup truncado que TestEngineConformance
-// exige de toda engine registrada. Espelha mysql_conformance_test.go quase
+// exige de toda engine registrada. Espelha mysql_conformance.go quase
 // linha a linha — a única diferença de fundo é a imagem de origem
 // (mariadb:<v> em vez de mysql:<v>) e os binários de cliente usados
 // (mariadb/mariadb-dump em vez de mysql/mysqldump), para o dump gerado
-// carregar o cabeçalho "-- MariaDB dump" que mariadbEngine.Detect exige.
+// carregar o cabeçalho "-- MariaDB dump" que MariaDBEngine.Detect exige.
 
 import (
 	"bytes"
@@ -147,7 +147,7 @@ func mariadbConformanceValidBackup(t *testing.T) conformance.ConformanceBackup {
 // mariadbConformanceTruncatedBackup implementa
 // ConformanceFixture.BuildTruncated para o MariaDB: pega um dump válido e
 // corta bem no meio da lista de valores do INSERT — mesmo raciocínio do
-// fixture MySQL (mysql_conformance_test.go): o mariadb-dump também é texto,
+// fixture MySQL (mysql_conformance.go): o mariadb-dump também é texto,
 // e cortar dentro da tupla de valores garante um statement sintaticamente
 // incompleto, erro de verdade em vez de silêncio.
 func mariadbConformanceTruncatedBackup(t *testing.T) string {

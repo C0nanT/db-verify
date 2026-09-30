@@ -27,7 +27,7 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "MySQL/MariaDB — Pass/MYSQL_ROOT_PASSWORD/MARIADB_ROOT_PASSWORD=root em mysql.go, mariadb.go e testes"
+description = "MySQL/MariaDB — Pass/MYSQL_ROOT_PASSWORD/MARIADB_ROOT_PASSWORD=root em engines/mysql/ (mysql.go, mariadb.go, fixtures e testes)"
 regexes = [
   '''(?i)^root$''',
 ]

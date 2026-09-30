@@ -1,8 +1,8 @@
 //go:build docker
 
-package main
+package mysql
 
-// Fixture de conformidade da engine MySQL (ver conformance_test.go): como
+// Fixture de conformidade da engine MySQL (ver conformance_test.go, na raiz): como
 // gerar o backup mínimo válido e o backup truncado que TestEngineConformance
 // exige de toda engine registrada.
 

@@ -47,13 +47,7 @@ func Lookup(name string) (Engine, bool) { return engine.Lookup(name) }
 // dos apelidos acima: as engines que ainda estão em main os usam pelos nomes
 // antigos. Saem junto com o movimento de cada engine.
 
-type relationalColumn = relational.Column
-
 var orderColumnTiers = relational.OrderColumnTiers
-
-func chooseRelationalOrderColumn(cols []relationalColumn, pk string, dateTypes map[string]bool) (string, bool) {
-	return relational.ChooseOrderColumn(cols, pk, dateTypes)
-}
 
 func sqlStringList(names []string) string { return relational.SQLStringList(names) }
 

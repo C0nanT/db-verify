@@ -7,7 +7,7 @@ import "testing"
 
 // TestSQLiteDetect_Header e TestSQLiteDetect_Gzip caracterizam a detecção
 // via InspectDump usando as fixtures reais em testdata/headers, incluindo
-// comprimida — mesmo padrão das demais engines (ver mysql_test.go).
+// comprimida — mesmo padrão das demais engines (ver mysql_detect_test.go).
 func TestSQLiteDetect_Header(t *testing.T) {
 	info, err := InspectDump("testdata/headers/sqlite.db")
 	if err != nil {

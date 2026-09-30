@@ -2,7 +2,7 @@ package sqlite
 
 // Testes da engine SQLite. Ao contrário das demais engines
 // relacionais, o fluxo inteiro (Provision → Session) não depende de Docker
-// — então, diferente de mysql_test.go/mariadb_test.go (que só cobrem
+// — então, diferente de engines/mysql/mysql_test.go e engines/mysql/mariadb_test.go (que só cobrem
 // detecção e heurística sem Docker, deixando o resto para a suíte de
 // conformidade atrás da build tag "docker"), este arquivo caracteriza o
 // contrato Engine/Session inteiro sem tag nenhuma: é exatamente o cenário
