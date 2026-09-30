@@ -20,6 +20,8 @@ package main
 import (
 	"context"
 	"database/sql"
+	"db-verify/internal/dumpio"
+	"db-verify/internal/engine"
 	"fmt"
 	"io"
 	"os"
@@ -303,7 +305,7 @@ func (c *mysqlContainer) CopyDump(ctx context.Context, b *Backup) error {
 		}
 		return nil
 	}
-	r, _, err := openMaybeCompressed(b.Path)
+	r, _, err := dumpio.OpenMaybeCompressed(b.Path)
 	if err != nil {
 		return err
 	}
@@ -434,7 +436,7 @@ func (s *mysqlSession) Health(ctx context.Context) (*Health, error) {
 	}
 	return &Health{
 		Name: name,
-		Size: humanSize(sizeBytes),
+		Size: engine.HumanSize(sizeBytes),
 		Fields: []HealthField{
 			{Label: "tabelas", Value: fmt.Sprint(tables)},
 			{Label: "views", Value: fmt.Sprint(views)},
@@ -540,7 +542,7 @@ func (s *mysqlSession) Collections(ctx context.Context, exact bool) ([]Collectio
 			Namespace:  s.cont.DB,
 			Name:       table,
 			Count:      count,
-			Size:       humanSize(sizeBytes.Int64),
+			Size:       engine.HumanSize(sizeBytes.Int64),
 			Hint:       orderHint(orderCol, byDate),
 			Preview:    mysqlRecentQuery(s.cont.DB, table, d),
 			Descriptor: d,

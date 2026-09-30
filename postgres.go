@@ -8,6 +8,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"db-verify/internal/dumpio"
 	"fmt"
 	"io"
 	"os"
@@ -244,7 +245,7 @@ func (c *pgContainer) CopyDump(ctx context.Context, b *Backup) error {
 		}
 		return nil
 	}
-	r, _, err := openMaybeCompressed(b.Path)
+	r, _, err := dumpio.OpenMaybeCompressed(b.Path)
 	if err != nil {
 		return err
 	}

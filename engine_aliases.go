@@ -9,8 +9,6 @@ package main
 // nada novo aqui.
 
 import (
-	"io"
-
 	"db-verify/internal/detect"
 	"db-verify/internal/engine"
 	"db-verify/internal/relational"
@@ -68,10 +66,6 @@ func InspectDump(path string) (*Backup, error) { return detect.InspectDump(path)
 
 func InspectDumpAs(path, forceEngine string) (*Backup, error) {
 	return detect.InspectDumpAs(path, forceEngine)
-}
-
-func openMaybeCompressed(path string) (io.ReadCloser, string, error) {
-	return detect.OpenMaybeCompressed(path)
 }
 
 func unknownEngineErr(name string) error { return detect.UnknownEngineErr(name) }

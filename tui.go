@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"db-verify/internal/engine"
 	"fmt"
 	"strings"
 
@@ -371,7 +372,7 @@ func (m *model) viewHeader() string {
 		stLabel.Render("origem:"), stValue.Render(origin),
 		stLabel.Render("engine:"), stValue.Render(m.backup.Engine+" "+orDash(m.backup.Version)),
 		stLabel.Render("formato:"), stValue.Render(m.backup.Format),
-		stLabel.Render("backup:"), stValue.Render(humanSize(m.backup.Size)),
+		stLabel.Render("backup:"), stValue.Render(engine.HumanSize(m.backup.Size)),
 		status)
 
 	fields := []string{fmt.Sprintf("%s %s", stLabel.Render("tamanho:"), stValue.Render(m.health.Size))}

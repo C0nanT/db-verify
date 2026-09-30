@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"db-verify/internal/engine"
 	"errors"
 	"flag"
 	"fmt"
@@ -164,7 +165,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 
 	fmt.Println()
 	fmt.Println(stTitle.Render("Verify Backup"))
-	fmt.Printf("  %s %s (%s)\n", stLabel.Render("arquivo    :"), abs, humanSize(backup.Size))
+	fmt.Printf("  %s %s (%s)\n", stLabel.Render("arquivo    :"), abs, engine.HumanSize(backup.Size))
 	fmt.Printf("  %s %s / compressão %s\n", stLabel.Render("formato    :"), backup.Format, backup.Compression)
 	if backup.OriginDB != "" {
 		fmt.Printf("  %s %s\n", stLabel.Render("banco orig.:"), backup.OriginDB)

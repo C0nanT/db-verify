@@ -41,6 +41,13 @@ go test -run TestFuncName ./...
 ./scripts/install-hooks # local core.hooksPath=.githooks (pre-commit=fast, pre-push=full)
 ```
 
+`./scripts/check full` leva ~3 min (suíte Docker), acima do timeout padrão de 120s do
+Bash. Rode com `run_in_background: true` (ou `timeout: 600000`) e espere a notificação de
+conclusão. Nunca faça polling com `until ! pgrep -f "scripts/check"; do sleep …; done`:
+o `-f` casa com a própria linha de comando do shell que contém a string, então o laço
+nunca termina e só sai no timeout de 10 min. Se precisar esperar, use `Monitor` ou
+`pgrep -x`/PID.
+
 Static lint is `golangci-lint` (staticcheck, errcheck, ineffassign, unused, govet),
 configured in `.golangci.yml` and pinned as a Go tool dependency in `go.mod`. Agents
 should run it through `scripts/check fast` (after `go vet`, before unit tests), not as a

@@ -92,13 +92,14 @@ Todos sob `internal/`, no mesmo módulo Go. O `main` continua na raiz, então
 | Pacote | Responsabilidade | Pode importar (do projeto) |
 |---|---|---|
 | `main` (raiz) | flags, roteiro `run()`, lista explícita de engines, testes do conjunto montado | todos |
-| `engine` | interfaces `Engine`/`Session`, tipos compartilhados (`Match`, `Backup`, `ProvisionOpts`, `Collection`, `Health`, `ResultSet`, `ConnectHint`, `RestoreResult`…), registro (`Register`, `Engines`, `Lookup`) | nenhum |
+| `engine` | interfaces `Engine`/`Session`, tipos compartilhados e `HumanSize` (`Match`, `Backup`, `ProvisionOpts`, `Collection`, `Health`, `ResultSet`, `ConnectHint`, `RestoreResult`…), registro (`Register`, `Engines`, `Lookup`) | nenhum |
 | `relational` | heurística de coluna de ordenação e helpers de dialeto compartilhados | `engine` |
 | `docker` | `DockerHost`: daemon, portas livres, retry por conflito de porta | `engine` se necessário |
-| `detect` | leitura/descompressão do cabeçalho, disputa entre engines registradas, `InspectDump` | `engine` |
+| `dumpio` | `OpenMaybeCompressed`: abre o backup descomprimindo gzip/zstd/bzip2 | nenhum |
+| `detect` | leitura do cabeçalho, disputa entre engines registradas, `InspectDump` | `engine`, `dumpio` |
 | `ui` | seletor de backups e TUI bubbletea | `engine`, `detect` |
 | `conformance` | registro de fixtures, tipo `ConformanceFixture`, helpers da suíte, helper de caminho do `testdata` | `engine` (e `docker` se os helpers precisarem) |
-| `engines/postgres`, `engines/mysql` (MySQL **e** MariaDB), `engines/sqlite`, `engines/redis`, `engines/mongo` | uma engine cada (MySQL/MariaDB compartilham) | `engine`, `relational`, `docker`, `conformance` (só nos arquivos com tag `docker`) |
+| `engines/postgres`, `engines/mysql` (MySQL **e** MariaDB), `engines/sqlite`, `engines/redis`, `engines/mongo` | uma engine cada (MySQL/MariaDB compartilham) | `engine`, `relational`, `docker`, `dumpio`, `conformance` (só nos arquivos com tag `docker`) |
 
 - **MySQL e MariaDB no mesmo pacote:** o MariaDB reaproveita container,
   sessão, SQL de introspecção, formatação e resolução de versão do MySQL.
@@ -143,7 +144,8 @@ Todos sob `internal/`, no mesmo módulo Go. O `main` continua na raiz, então
   como já acontece com o lint:
   - `engines/*` não importa outra engine, `ui`, `detect` nem `main`.
   - `ui` e `detect` não importam nenhum pacote de `engines/*`.
-  - `engine` não importa nenhum outro pacote do projeto.
+  - `engine` e `dumpio` não importam nenhum outro pacote do projeto.
+  - `engines/*` e `detect` podem importar `dumpio`.
 - O `depguard` é ligado no último passo, quando todos os pacotes já existem,
   para não precisar de exceções temporárias.
 

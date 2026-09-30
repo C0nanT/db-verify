@@ -14,10 +14,10 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seções "Pacotes" e "Fronteiras fisc
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] `internal/dumpio` existe, com `OpenMaybeCompressed`, e não importa nenhum pacote do projeto.
-- [ ] `internal/detect` importa `dumpio` e `engine`, e mais nada do projeto.
-- [ ] `engine.HumanSize` existe, com teste, e `humanSize` saiu de `util.go`.
-- [ ] `SPEC.md` descreve `dumpio` na tabela de pacotes e na regra do `depguard`.
-- [ ] `./scripts/check full` passa.
+- [x] `internal/dumpio` existe, com `OpenMaybeCompressed`, e não importa nenhum pacote do projeto.
+- [x] `internal/detect` importa `dumpio` e `engine`, e mais nada do projeto.
+- [x] `engine.HumanSize` existe, com teste, e `humanSize` saiu de `util.go`.
+- [x] `SPEC.md` descreve `dumpio` na tabela de pacotes e na regra do `depguard`.
+- [x] `./scripts/check full` passa.

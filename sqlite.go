@@ -25,6 +25,8 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"db-verify/internal/dumpio"
+	"db-verify/internal/engine"
 	"fmt"
 	"io"
 	"os"
@@ -114,12 +116,12 @@ func (sqliteEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts
 	}, nil
 }
 
-// sqliteCopyToTemp descomprime o backup se preciso (openMaybeCompressed já
+// sqliteCopyToTemp descomprime o backup se preciso (dumpio.OpenMaybeCompressed já
 // cuida de gzip/zstd/bzip2/nenhum de forma uniforme) e o copia por stream
 // para um arquivo novo, temporário — nunca abre nem grava no arquivo
 // original apontado por b.Path.
 func sqliteCopyToTemp(b *Backup) (string, error) {
-	r, _, err := openMaybeCompressed(b.Path)
+	r, _, err := dumpio.OpenMaybeCompressed(b.Path)
 	if err != nil {
 		return "", err
 	}
@@ -351,7 +353,7 @@ func (s *sqliteSession) Health(ctx context.Context) (*Health, error) {
 
 	return &Health{
 		Name: s.origName,
-		Size: humanSize(st.Size()),
+		Size: engine.HumanSize(st.Size()),
 		Fields: []HealthField{
 			{Label: "tabelas", Value: fmt.Sprint(tables)},
 			{Label: "views", Value: fmt.Sprint(views)},
@@ -388,7 +390,7 @@ func (s *sqliteSession) Collections(ctx context.Context, exact bool) ([]Collecti
 		out = append(out, Collection{
 			Name:       name,
 			Count:      count,
-			Size:       humanSize(s.sqliteTableSize(ctx, name)),
+			Size:       engine.HumanSize(s.sqliteTableSize(ctx, name)),
 			Hint:       orderHint(orderCol, byDate),
 			Preview:    sqliteRecentQuery(name, d),
 			Descriptor: d,

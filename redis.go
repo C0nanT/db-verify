@@ -23,6 +23,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"db-verify/internal/dumpio"
 	"fmt"
 	"io"
 	"os"
@@ -261,7 +262,7 @@ func (c *redisContainer) CopyDump(ctx context.Context, b *Backup) error {
 		return c.streamDumpTar(ctx, b.Path, b.Size)
 	}
 
-	r, _, err := openMaybeCompressed(b.Path)
+	r, _, err := dumpio.OpenMaybeCompressed(b.Path)
 	if err != nil {
 		return err
 	}

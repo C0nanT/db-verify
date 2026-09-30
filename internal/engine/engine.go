@@ -6,6 +6,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 )
@@ -103,6 +104,21 @@ func (c Collection) Qualified() string {
 		return c.Name
 	}
 	return c.Namespace + "." + c.Name
+}
+
+// HumanSize formata um tamanho em bytes para exibição ("512 B", "1.5 MB"),
+// como o campo Size de Collection.
+func HumanSize(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 // HealthField é um par rótulo/valor que uma engine publica sobre o backup

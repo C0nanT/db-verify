@@ -22,6 +22,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"db-verify/internal/dumpio"
+	"db-verify/internal/engine"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -318,7 +320,7 @@ var reMongoRestoreSummary = regexp.MustCompile(`(\d+) document\(s\) failed to re
 // backup (já descomprimido sob demanda) via stdin — nunca grava um arquivo
 // intermediário dentro do container (ticket 09).
 func (c *mongoContainer) Restore(ctx context.Context, b *Backup, jobs int) (*RestoreResult, error) {
-	r, _, err := openMaybeCompressed(b.Path)
+	r, _, err := dumpio.OpenMaybeCompressed(b.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -606,7 +608,7 @@ func (s *mongoSession) Health(ctx context.Context) (*Health, error) {
 	}
 	return &Health{
 		Name: mongoHealthName(s.dbNames),
-		Size: humanSize(totalSize),
+		Size: engine.HumanSize(totalSize),
 		Fields: []HealthField{
 			{Label: "coleções", Value: fmt.Sprint(totalCollections)},
 			{Label: "índices", Value: fmt.Sprint(totalIndexes)},
@@ -674,7 +676,7 @@ func (s *mongoSession) Collections(ctx context.Context, exact bool) ([]Collectio
 				Namespace:  dbName,
 				Name:       name,
 				Count:      count,
-				Size:       humanSize(sizeBytes),
+				Size:       engine.HumanSize(sizeBytes),
 				Hint:       mongoOrderHint(d.OrderField),
 				Preview:    mongoRecentQuery(dbName, name, d),
 				Descriptor: d,

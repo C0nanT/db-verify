@@ -1,6 +1,7 @@
 package main
 
 import (
+	"db-verify/internal/engine"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -125,13 +126,13 @@ func (m *pickerModel) View() string {
 		}
 	}
 	for i, d := range m.backups {
-		engine := d.engineLabel()
+		label := d.engineLabel()
 		if d.Unknown {
-			engine = stDim.Render(fmt.Sprintf("%-*s", engineW, engine))
+			label = stDim.Render(fmt.Sprintf("%-*s", engineW, label))
 		} else {
-			engine = stAccent.Render(fmt.Sprintf("%-*s", engineW, engine))
+			label = stAccent.Render(fmt.Sprintf("%-*s", engineW, label))
 		}
-		row := fmt.Sprintf("%-*s  %s  %8s  %s", nameW, d.Name, engine, humanSize(d.Size), d.ModTime)
+		row := fmt.Sprintf("%-*s  %s  %8s  %s", nameW, d.Name, label, engine.HumanSize(d.Size), d.ModTime)
 		if d.Unknown {
 			row = stDim.Render("  " + row)
 		} else if i == m.cursor {
