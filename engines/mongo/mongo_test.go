@@ -1,4 +1,4 @@
-package main
+package mongo
 
 // Testes de unidade da engine MongoDB (Camada 1 — sem Docker): detecção do
 // magic number e extração de versão do cabeçalho do archive, resolução de
@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"db-verify/internal/engine"
 )
 
 // buildMongoArchiveHeader monta um cabeçalho de archive sintético: magic
@@ -34,15 +36,15 @@ func buildMongoArchiveHeader(t *testing.T, serverVersion string) []byte {
 
 func TestMongoEngine_Detect_MagicComVersao(t *testing.T) {
 	head := buildMongoArchiveHeader(t, "7.0.14")
-	m, ok := mongoEngine{}.Detect(head, "backup.archive")
+	m, ok := Engine{}.Detect(head, "backup.archive")
 	if !ok {
 		t.Fatal("esperava reconhecer o archive pelo magic number")
 	}
 	if m.Format != "archive" {
 		t.Errorf("Format = %q, want archive", m.Format)
 	}
-	if m.Confidence != ConfidenceMagic {
-		t.Errorf("Confidence = %d, want %d", m.Confidence, ConfidenceMagic)
+	if m.Confidence != engine.ConfidenceMagic {
+		t.Errorf("Confidence = %d, want %d", m.Confidence, engine.ConfidenceMagic)
 	}
 	if m.Version != "7.0" {
 		t.Errorf("Version = %q, want 7.0 (major.minor de 7.0.14)", m.Version)
@@ -53,7 +55,7 @@ func TestMongoEngine_Detect_MagicSemVersaoReconhecivel(t *testing.T) {
 	// magic number seguido de lixo não-BSON: ainda reconhece o formato,
 	// só não extrai versão.
 	head := append(append([]byte{}, mongoArchiveMagic...), []byte("lixo qualquer")...)
-	m, ok := mongoEngine{}.Detect(head, "backup.archive")
+	m, ok := Engine{}.Detect(head, "backup.archive")
 	if !ok {
 		t.Fatal("esperava reconhecer pelo magic number mesmo sem cabeçalho BSON válido")
 	}
@@ -63,17 +65,17 @@ func TestMongoEngine_Detect_MagicSemVersaoReconhecivel(t *testing.T) {
 }
 
 func TestMongoEngine_Detect_ExtensaoSemMagic(t *testing.T) {
-	m, ok := mongoEngine{}.Detect([]byte("qualquer coisa"), "backup.archive")
+	m, ok := Engine{}.Detect([]byte("qualquer coisa"), "backup.archive")
 	if !ok {
 		t.Fatal("esperava reconhecer pela extensão .archive")
 	}
-	if m.Confidence != ConfidenceExtension {
-		t.Errorf("Confidence = %d, want %d", m.Confidence, ConfidenceExtension)
+	if m.Confidence != engine.ConfidenceExtension {
+		t.Errorf("Confidence = %d, want %d", m.Confidence, engine.ConfidenceExtension)
 	}
 }
 
 func TestMongoEngine_Detect_NadaReconhecido(t *testing.T) {
-	_, ok := mongoEngine{}.Detect([]byte("qualquer coisa"), "backup.bin")
+	_, ok := Engine{}.Detect([]byte("qualquer coisa"), "backup.bin")
 	if ok {
 		t.Fatal("não deveria reconhecer arquivo sem magic number nem extensão .archive")
 	}

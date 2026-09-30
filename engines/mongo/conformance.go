@@ -1,8 +1,8 @@
 //go:build docker
 
-package main
+package mongo
 
-// Fixture de conformidade da engine MongoDB (ver conformance_test.go): como
+// Fixture de conformidade da engine MongoDB (ver conformance_test.go, na raiz): como
 // gerar o archive mínimo válido e o archive truncado que TestEngineConformance
 // exige de toda engine registrada.
 //

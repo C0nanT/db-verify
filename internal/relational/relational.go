@@ -15,7 +15,7 @@ package relational
 //     postgres.go, tablesSQL);
 //   - MySQL/MariaDB e SQLite: decidem em Go via ChooseOrderColumn,
 //     cada um informando o próprio conjunto de tipos de data;
-//   - Mongo: usa só as camadas 1–3 de nome, achatadas (ver mongo.go).
+//   - Mongo: usa só as camadas 1–3 de nome, achatadas (ver engines/mongo/mongo.go).
 
 import (
 	"fmt"

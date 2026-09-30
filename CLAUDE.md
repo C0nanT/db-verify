@@ -66,7 +66,7 @@ Everything funnels through one interface pair:
   `Recent`, `Query`, `ConnectHint`, `Restore`, `Close`.
 
 Each engine lives in its own file (`postgres.go`, `mysql.go`, `mariadb.go`, `engines/sqlite/`,
-`engines/redis/`, `mongo.go`) implementing both interfaces against Docker + that engine's
+`engines/redis/`, `engines/mongo/`) implementing both interfaces against Docker + that engine's
 driver/CLI, and self-registers via `func init() { Register(xEngine{}) }`. Callers
 (`main.go`, `picker.go`, `tui.go`, `detect.go`) only ever depend on `Engine`/`Session`
 and the `Engines()`/`Lookup()` registry — never on a concrete engine type. `relational.go`
@@ -126,7 +126,7 @@ When applying a principle would require reshaping modules outside the current fl
 ### In this repo
 
 - **Policy** — `engine.go` (the `Engine`/`Session` interfaces, `Match`/`Backup`/`Collection`/`Health` types, the engine registry) and `relational.go` (heuristics shared by relational engines).
-- **Details** — the per-engine files (`postgres.go`, `mysql.go`, `mariadb.go`, `mongo.go`, `engines/redis/`, `engines/sqlite/`), each implementing `Engine`/`Session` against Docker and a specific DB driver/CLI.
+- **Details** — the per-engine files (`postgres.go`, `mysql.go`, `mariadb.go`, `engines/mongo/`, `engines/redis/`, `engines/sqlite/`), each implementing `Engine`/`Session` against Docker and a specific DB driver/CLI.
 - **Wiring** — each engine file self-registers via `func init() { Register(xEngine{}) }`; callers (`main.go`, `picker.go`, `tui.go`, `detect.go`) depend only on the `Engine`/`Session` interfaces from `engine.go` and the `Engines()`/`Lookup()` registry, never on concrete engine types.
 - **Test substitution** — tests implement `Engine`/`Session` with fakes (e.g. `fakeEngine` in `detect_test.go`) instead of standing up a real container.
 

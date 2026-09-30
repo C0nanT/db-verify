@@ -1,4 +1,4 @@
-package main
+package mongo
 
 // Implementação da engine MongoDB atrás da interface Engine/Session. É a
 // engine que mais tensiona o modelo de Collection/ResultSet do jeito
@@ -24,6 +24,7 @@ import (
 	"context"
 	"db-verify/internal/dumpio"
 	"db-verify/internal/engine"
+	"db-verify/internal/relational"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -41,10 +42,10 @@ import (
 	"db-verify/internal/docker"
 )
 
-// mongoEngine implementa Engine para MongoDB.
-type mongoEngine struct{}
+// Engine implementa Engine para MongoDB.
+type Engine struct{}
 
-func (mongoEngine) Name() string { return "mongodb" }
+func (Engine) Name() string { return "mongodb" }
 
 // mongoArchiveMagic são os 4 bytes de assinatura de um archive do mongodump
 // (mongo-tools, common/archive/archive.go: "const MagicNumber uint32 =
@@ -61,9 +62,9 @@ var reMongoVersion = regexp.MustCompile(`^(\d+\.\d+)`)
 // com fallback de confiança média para a extensão .archive. A versão do
 // servidor de origem, quando presente, vem do campo "server_version" do
 // cabeçalho BSON que segue o magic number (ver mongoExtractHeaderField).
-func (mongoEngine) Detect(head []byte, path string) (Match, bool) {
+func (Engine) Detect(head []byte, path string) (engine.Match, bool) {
 	if bytes.HasPrefix(head, mongoArchiveMagic) {
-		m := Match{Format: "archive", Confidence: ConfidenceMagic}
+		m := engine.Match{Format: "archive", Confidence: engine.ConfidenceMagic}
 		if v := mongoExtractHeaderField(head, "server_version"); v != "" {
 			if mm := reMongoVersion.FindStringSubmatch(v); mm != nil {
 				m.Version = mm[1]
@@ -72,14 +73,14 @@ func (mongoEngine) Detect(head []byte, path string) (Match, bool) {
 		return m, true
 	}
 	if strings.HasSuffix(strings.ToLower(path), ".archive") {
-		return Match{Format: "archive", Confidence: ConfidenceExtension}, true
+		return engine.Match{Format: "archive", Confidence: engine.ConfidenceExtension}, true
 	}
-	return Match{}, false
+	return engine.Match{}, false
 }
 
 // Expects descreve o que o MongoDB reconhece, para mensagens de erro e
 // --list-engines.
-func (mongoEngine) Expects() string {
+func (Engine) Expects() string {
 	return "archives do mongodump --archive: magic number 0x8199e26d, ou extensão .archive"
 }
 
@@ -136,7 +137,7 @@ var mongoSystemDBs = map[string]bool{"admin": true, "local": true, "config": tru
 // Provision sobe o container, espera o mongod ficar pronto, restaura o
 // archive via mongorestore lendo de stdin (sem arquivo intermediário dentro
 // do container) e conecta — mesmo formato grosso das demais engines.
-func (mongoEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
+func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	if err := docker.DockerAvailable(ctx); err != nil {
 		return nil, err
 	}
@@ -319,7 +320,7 @@ var reMongoRestoreSummary = regexp.MustCompile(`(\d+) document\(s\) failed to re
 // Restore executa mongorestore --archive dentro do container, lendo o
 // backup (já descomprimido sob demanda) via stdin — nunca grava um arquivo
 // intermediário dentro do container (ticket 09).
-func (c *mongoContainer) Restore(ctx context.Context, b *Backup, jobs int) (*RestoreResult, error) {
+func (c *mongoContainer) Restore(ctx context.Context, b *engine.Backup, jobs int) (*engine.RestoreResult, error) {
 	r, _, err := dumpio.OpenMaybeCompressed(b.Path)
 	if err != nil {
 		return nil, err
@@ -340,7 +341,7 @@ func (c *mongoContainer) Restore(ctx context.Context, b *Backup, jobs int) (*Res
 	cmd.Stderr = &out
 	runErr := cmd.Run()
 
-	res := &RestoreResult{Duration: time.Since(start)}
+	res := &engine.RestoreResult{Duration: time.Since(start)}
 	if ee, ok := runErr.(*exec.ExitError); ok {
 		res.ExitCode = ee.ExitCode()
 	} else if runErr != nil {
@@ -398,7 +399,7 @@ func mongoConnect(ctx context.Context, uri string) (*mongo.Client, error) {
 // feita a partir de uma amostra de documento (ver mongoChooseOrderField), não
 // de um catálogo.
 var mongoOrderFields = append(append(append([]string{},
-	orderColumnTiers[0]...), orderColumnTiers[1]...), orderColumnTiers[2]...)
+	relational.OrderColumnTiers[0]...), relational.OrderColumnTiers[1]...), relational.OrderColumnTiers[2]...)
 
 // mongoDescriptor é o Descriptor opaco que Collections anexa a cada
 // Collection e que Recent usa para montar a consulta — só a engine MongoDB
@@ -535,7 +536,7 @@ func mongoFormatScalar(v any) string {
 // mesmo com documentos de formato variável. Colunas ausentes num documento
 // específico (ex.: veio de um formato mais antigo) viram "∅", igual valor
 // nulo em qualquer outra engine.
-func mongoBuildResultSet(docs []bson.M, query string, elapsed time.Duration) *ResultSet {
+func mongoBuildResultSet(docs []bson.M, query string, elapsed time.Duration) *engine.ResultSet {
 	flat := make([]map[string]string, len(docs))
 	seen := map[string]bool{}
 	for i, doc := range docs {
@@ -559,7 +560,7 @@ func mongoBuildResultSet(docs []bson.M, query string, elapsed time.Duration) *Re
 	sort.Strings(rest)
 	cols = append(cols, rest...)
 
-	rs := &ResultSet{Columns: cols, Query: query, Language: "mongo", Elapsed: elapsed}
+	rs := &engine.ResultSet{Columns: cols, Query: query, Language: "mongo", Elapsed: elapsed}
 	for _, f := range flat {
 		row := make([]string, len(cols))
 		for i, c := range cols {
@@ -577,7 +578,7 @@ func mongoBuildResultSet(docs []bson.M, query string, elapsed time.Duration) *Re
 type mongoSession struct {
 	client  *mongo.Client
 	cont    *mongoContainer
-	restore *RestoreResult
+	restore *engine.RestoreResult
 	// dbNames são as databases que o restore produziu (sem as internas do
 	// servidor) — o que Collections/Health enxergam como o backup.
 	dbNames []string
@@ -594,7 +595,7 @@ func mongoHealthName(dbNames []string) string {
 	return strings.Join(dbNames, ", ")
 }
 
-func (s *mongoSession) Health(ctx context.Context) (*Health, error) {
+func (s *mongoSession) Health(ctx context.Context) (*engine.Health, error) {
 	var totalCollections, totalIndexes int64
 	var totalSize int64
 	for _, dbName := range s.dbNames {
@@ -606,10 +607,10 @@ func (s *mongoSession) Health(ctx context.Context) (*Health, error) {
 		totalIndexes += mongoStatsInt(stats, "indexes")
 		totalSize += mongoStatsInt(stats, "dataSize")
 	}
-	return &Health{
+	return &engine.Health{
 		Name: mongoHealthName(s.dbNames),
 		Size: engine.HumanSize(totalSize),
-		Fields: []HealthField{
+		Fields: []engine.HealthField{
 			{Label: "coleções", Value: fmt.Sprint(totalCollections)},
 			{Label: "índices", Value: fmt.Sprint(totalIndexes)},
 		},
@@ -637,8 +638,8 @@ func mongoStatsInt(stats bson.M, field string) int64 {
 // servidor) e lista suas coleções, exceto as de sistema (system.*) — uma
 // coleção vazia aparece com contagem zero, nunca omitida (mesmo contrato das
 // demais engines).
-func (s *mongoSession) Collections(ctx context.Context, exact bool) ([]Collection, error) {
-	var out []Collection
+func (s *mongoSession) Collections(ctx context.Context, exact bool) ([]engine.Collection, error) {
+	var out []engine.Collection
 	for _, dbName := range s.dbNames {
 		db := s.client.Database(dbName)
 		names, err := db.ListCollectionNames(ctx, bson.D{})
@@ -672,7 +673,7 @@ func (s *mongoSession) Collections(ctx context.Context, exact bool) ([]Collectio
 			_ = col.FindOne(ctx, bson.D{}).Decode(&sample) // erro (ex.: ErrNoDocuments) só significa "sem amostra"
 			d := mongoDescriptor{OrderField: mongoChooseOrderField(sample)}
 
-			out = append(out, Collection{
+			out = append(out, engine.Collection{
 				Namespace:  dbName,
 				Name:       name,
 				Count:      count,
@@ -686,7 +687,7 @@ func (s *mongoSession) Collections(ctx context.Context, exact bool) ([]Collectio
 	return out, nil
 }
 
-func (s *mongoSession) Recent(ctx context.Context, c Collection) (*ResultSet, error) {
+func (s *mongoSession) Recent(ctx context.Context, c engine.Collection) (*engine.ResultSet, error) {
 	d, _ := c.Descriptor.(mongoDescriptor)
 	field := "_id"
 	if d.OrderField != "" {
@@ -712,7 +713,7 @@ func (s *mongoSession) Recent(ctx context.Context, c Collection) (*ResultSet, er
 // database usaria para comandos administrativos). Não há UI para digitar
 // consulta livre nesta entrega (SPEC.md, "Fora do escopo"); a interface
 // existe e é usada internamente e pela suíte de conformidade.
-func (s *mongoSession) Query(ctx context.Context, raw string) (*ResultSet, error) {
+func (s *mongoSession) Query(ctx context.Context, raw string) (*engine.ResultSet, error) {
 	var cmd bson.D
 	if err := bson.UnmarshalExtJSON([]byte(raw), false, &cmd); err != nil {
 		return nil, fmt.Errorf("comando inválido (esperado JSON, ex.: {\"ping\":1}): %w", err)
@@ -723,17 +724,17 @@ func (s *mongoSession) Query(ctx context.Context, raw string) (*ResultSet, error
 	if err := s.client.Database("admin").RunCommand(ctx, cmd).Decode(&result); err != nil {
 		return nil, err
 	}
-	rs := &ResultSet{Query: raw, Language: "mongo", Columns: []string{"resultado"}, Elapsed: time.Since(start)}
+	rs := &engine.ResultSet{Query: raw, Language: "mongo", Columns: []string{"resultado"}, Elapsed: time.Since(start)}
 	rs.Rows = append(rs.Rows, []string{mongoCompactJSON(result)})
 	return rs, nil
 }
 
-func (s *mongoSession) ConnectHint() ConnectHint {
+func (s *mongoSession) ConnectHint() engine.ConnectHint {
 	dsn := s.cont.URI()
 	if len(s.dbNames) == 1 {
 		dsn += "/" + s.dbNames[0]
 	}
-	return ConnectHint{
+	return engine.ConnectHint{
 		Name:      s.cont.Name,
 		DSN:       dsn,
 		Shell:     fmt.Sprintf("mongosh %q", dsn),
@@ -743,7 +744,7 @@ func (s *mongoSession) ConnectHint() ConnectHint {
 	}
 }
 
-func (s *mongoSession) Restore() *RestoreResult { return s.restore }
+func (s *mongoSession) Restore() *engine.RestoreResult { return s.restore }
 
 func (s *mongoSession) Close() error {
 	var err error

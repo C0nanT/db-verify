@@ -18,7 +18,7 @@ redivida o módulo aqui, sem traçar uma linha nova em silêncio.
 | mysql-family | `mysql*.go`, `mariadb*.go` | proposed | — | — | — |
 | sqlite | `engines/sqlite/` | proposed | — | — | — |
 | redis | `engines/redis/` | proposed | — | — | — |
-| mongo | `mongo*.go` | proposed | — | — | — |
+| mongo | `engines/mongo/` | proposed | — | — | — |
 
 ## Guardrails
 

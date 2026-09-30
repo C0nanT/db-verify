@@ -1,6 +1,7 @@
 package main
 
 import (
+	"db-verify/engines/mongo"
 	"db-verify/engines/redis"
 	"db-verify/engines/sqlite"
 )
@@ -15,7 +16,7 @@ import (
 // quanto nos testes da raiz, onde main() não executa.
 var _ = registrarEngines(
 	mariadbEngine{},
-	mongoEngine{},
+	mongo.Engine{},
 	mysqlEngine{},
 	pgEngine{},
 	redis.Engine{},
