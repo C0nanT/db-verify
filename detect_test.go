@@ -5,15 +5,11 @@ package main
 // extensão > palpite, empate por ordem de registro), o erro de "nenhuma
 // engine reconheceu" e o comportamento de --engine.
 //
-// Os testes de disputa/erro usam engines fictícias (fakeEngine, abaixo) em
-// vez do registro global: com só Postgres registrado — que tem um palpite
-// que reconhece qualquer coisa (ver postgres.go, Detect, caso default) —
-// esses cenários nunca ocorreriam de ponta a ponta. chooseEngine e
-// noEngineErr existem justamente para serem exercitados isoladamente aqui,
-// sem depender de uma segunda engine de verdade estar registrada.
+// Aqui ficam os testes que precisam das engines reais registradas (a lista
+// de registrarEngines). A disputa de confiança e o erro de "nenhuma engine
+// reconheceu", testados com engines fictícias, vivem em internal/detect.
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,100 +37,6 @@ func createSparseFile(t *testing.T, header string, size int64) (string, error) {
 		return "", err
 	}
 	return path, f.Close()
-}
-
-// fakeEngine é uma engine mínima para testar a disputa de confiança sem
-// depender do registro global nem de uma engine de verdade.
-type fakeEngine struct {
-	name    string
-	detect  func(head []byte, path string) (Match, bool)
-	expects string
-}
-
-func (f fakeEngine) Name() string { return f.name }
-func (f fakeEngine) Detect(head []byte, path string) (Match, bool) {
-	if f.detect == nil {
-		return Match{}, false
-	}
-	return f.detect(head, path)
-}
-func (f fakeEngine) Expects() string { return f.expects }
-func (f fakeEngine) Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error) {
-	panic("fakeEngine.Provision não deveria ser chamado em teste de detecção")
-}
-
-func matchAlways(format string, confidence int) func([]byte, string) (Match, bool) {
-	return func(head []byte, path string) (Match, bool) {
-		return Match{Format: format, Confidence: confidence}, true
-	}
-}
-
-func matchNever(head []byte, path string) (Match, bool) { return Match{}, false }
-
-// TestChooseEngine_MagicVenceExtensaoVencePalpite caracteriza o desempate
-// por confiança: magic bytes (100) > extensão (50) > palpite (10),
-// independentemente da ordem em que as engines estão na lista.
-func TestChooseEngine_MagicVenceExtensaoVencePalpite(t *testing.T) {
-	magic := fakeEngine{name: "magic", detect: matchAlways("m", ConfidenceMagic)}
-	ext := fakeEngine{name: "ext", detect: matchAlways("e", ConfidenceExtension)}
-	guess := fakeEngine{name: "guess", detect: matchAlways("g", ConfidenceGuess)}
-
-	eng, m, ok := chooseEngine([]Engine{guess, ext, magic}, nil, "arquivo")
-	if !ok || eng.Name() != "magic" || m.Format != "m" {
-		t.Fatalf("esperava magic vencer, tive engine=%v format=%q ok=%v", eng, m.Format, ok)
-	}
-
-	eng, _, ok = chooseEngine([]Engine{guess, magic, ext}, nil, "arquivo")
-	if !ok || eng.Name() != "magic" {
-		t.Fatalf("esperava magic vencer independente da ordem, tive %v", eng)
-	}
-
-	eng, _, ok = chooseEngine([]Engine{guess, ext}, nil, "arquivo")
-	if !ok || eng.Name() != "ext" {
-		t.Fatalf("esperava extensão vencer palpite, tive %v", eng)
-	}
-}
-
-// TestChooseEngine_EmpateResolvePorOrdemDeRegistro: duas engines com a
-// mesma confiança — a primeira da lista (ordem de registro) vence.
-func TestChooseEngine_EmpateResolvePorOrdemDeRegistro(t *testing.T) {
-	first := fakeEngine{name: "primeira", detect: matchAlways("f", ConfidenceMagic)}
-	second := fakeEngine{name: "segunda", detect: matchAlways("s", ConfidenceMagic)}
-
-	eng, _, ok := chooseEngine([]Engine{first, second}, nil, "arquivo")
-	if !ok || eng.Name() != "primeira" {
-		t.Fatalf("esperava a primeira registrada vencer o empate, tive %v", eng)
-	}
-
-	// invertendo a ordem de registro, a vencedora muda junto.
-	eng, _, ok = chooseEngine([]Engine{second, first}, nil, "arquivo")
-	if !ok || eng.Name() != "segunda" {
-		t.Fatalf("esperava a primeira da lista (agora segunda) vencer, tive %v", eng)
-	}
-}
-
-// TestChooseEngine_NenhumaReconhece: quando nenhuma engine da lista
-// reconhece o cabeçalho, chooseEngine devolve ok=false, e noEngineErr monta
-// um erro nomeando as engines disponíveis e o que cada uma espera.
-func TestChooseEngine_NenhumaReconhece(t *testing.T) {
-	a := fakeEngine{name: "aa", detect: matchNever, expects: "cabeçalho AA"}
-	b := fakeEngine{name: "bb", detect: matchNever, expects: "cabeçalho BB"}
-
-	_, _, ok := chooseEngine([]Engine{a, b}, []byte("lixo"), "arquivo.bin")
-	if ok {
-		t.Fatalf("esperava ok=false quando nenhuma engine reconhece")
-	}
-
-	err := noEngineErr([]Engine{a, b})
-	if err == nil {
-		t.Fatalf("esperava erro não nulo")
-	}
-	msg := err.Error()
-	for _, want := range []string{"aa", "cabeçalho AA", "bb", "cabeçalho BB"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("mensagem de erro não menciona %q: %s", want, msg)
-		}
-	}
 }
 
 // TestInspectDumpAs_ForcaEngineESepulaDisputa: com --engine, só a engine

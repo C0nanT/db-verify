@@ -1,4 +1,4 @@
-package main
+package detect
 
 // Detecção de formato genérica, em duas fases (ver SPEC.md, "Detecção"):
 //
@@ -8,6 +8,8 @@ package main
 //  2. perguntar a cada engine registrada quem reconhece o conteúdo e ficar
 //     com a de maior confiança (magic bytes > extensão > palpite); empate
 //     fica com a primeira registrada.
+//
+// Só depende do contrato (internal/engine): as engines chegam pelo registro.
 //
 // --engine pula a fase 2 inteira: em vez de perguntar a todo o registro, só
 // a engine escolhida é consultada (ela ainda precisa do cabeçalho
@@ -22,6 +24,8 @@ import (
 	"os"
 	"strings"
 
+	"db-verify/internal/engine"
+
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -30,10 +34,10 @@ import (
 // bastante para nunca se aproximar do tamanho de um dump de verdade.
 const headerSize = 8192
 
-// openMaybeCompressed devolve um reader já descomprimido quando necessário.
+// OpenMaybeCompressed devolve um reader já descomprimido quando necessário.
 // Só os magic bytes de compressão são olhados aqui; o corpo é lido sob
 // demanda pelo chamador (que, na detecção, para depois de headerSize bytes).
-func openMaybeCompressed(path string) (io.ReadCloser, string, error) {
+func OpenMaybeCompressed(path string) (io.ReadCloser, string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, "", err
@@ -81,27 +85,6 @@ func (z zstdReadCloser) Close() error {
 	return z.f.Close()
 }
 
-// printableStrings extrai as sequências imprimíveis (>=2 chars) de um blob binário.
-func printableStrings(b []byte) []string {
-	var out []string
-	var cur strings.Builder
-	flush := func() {
-		if cur.Len() >= 2 {
-			out = append(out, cur.String())
-		}
-		cur.Reset()
-	}
-	for _, c := range b {
-		if c >= 0x20 && c < 0x7f {
-			cur.WriteByte(c)
-		} else {
-			flush()
-		}
-	}
-	flush()
-	return out
-}
-
 // readHeader abre o arquivo (descomprimindo se preciso) e devolve seu
 // tamanho original e os primeiros headerSize bytes já descomprimidos.
 func readHeader(path string) (size int64, head []byte, compression string, err error) {
@@ -109,7 +92,7 @@ func readHeader(path string) (size int64, head []byte, compression string, err e
 	if err != nil {
 		return 0, nil, "", err
 	}
-	r, compression, err := openMaybeCompressed(path)
+	r, compression, err := OpenMaybeCompressed(path)
 	if err != nil {
 		return 0, nil, "", err
 	}
@@ -124,9 +107,9 @@ func readHeader(path string) (size int64, head []byte, compression string, err e
 // engines: pergunta a cada uma e fica com a de maior confiança; empate fica
 // com a primeira da lista. Separada de InspectDump para poder ser testada
 // com engines fictícias, sem depender do registro global (ver detect_test.go).
-func chooseEngine(engines []Engine, head []byte, path string) (Engine, Match, bool) {
-	var bestEngine Engine
-	var best Match
+func chooseEngine(engines []engine.Engine, head []byte, path string) (engine.Engine, engine.Match, bool) {
+	var bestEngine engine.Engine
+	var best engine.Match
 	for _, e := range engines {
 		m, ok := e.Detect(head, path)
 		if !ok {
@@ -141,7 +124,7 @@ func chooseEngine(engines []Engine, head []byte, path string) (Engine, Match, bo
 
 // noEngineErr monta o erro de "nenhuma engine reconheceu", nomeando as
 // engines disponíveis e o que cada uma espera.
-func noEngineErr(engines []Engine) error {
+func noEngineErr(engines []engine.Engine) error {
 	if len(engines) == 0 {
 		return fmt.Errorf("nenhuma engine registrada")
 	}
@@ -156,46 +139,46 @@ func noEngineErr(engines []Engine) error {
 
 // InspectDump lê o cabeçalho do arquivo (descomprimindo se preciso) e
 // pergunta ao registro qual engine o reconhece.
-func InspectDump(path string) (*Backup, error) {
+func InspectDump(path string) (*engine.Backup, error) {
 	return inspect(path, "")
 }
 
 // InspectDumpAs força a engine indicada, pulando a disputa entre engines
 // (fase 2 da detecção): só forceEngine é consultada para o cabeçalho já
 // descomprimido. forceEngine precisa estar registrada.
-func InspectDumpAs(path, forceEngine string) (*Backup, error) {
+func InspectDumpAs(path, forceEngine string) (*engine.Backup, error) {
 	if forceEngine == "" {
 		return inspect(path, "")
 	}
-	eng, ok := Lookup(forceEngine)
+	eng, ok := engine.Lookup(forceEngine)
 	if !ok {
-		return nil, unknownEngineErr(forceEngine)
+		return nil, UnknownEngineErr(forceEngine)
 	}
 	return inspect(path, eng.Name())
 }
 
-// unknownEngineErr monta o erro de --engine com um nome que não está
+// UnknownEngineErr monta o erro de --engine com um nome que não está
 // registrado, listando as engines disponíveis.
-func unknownEngineErr(name string) error {
+func UnknownEngineErr(name string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "engine %q não existe. engines disponíveis:\n", name)
-	for _, e := range Engines() {
+	for _, e := range engine.Engines() {
 		fmt.Fprintf(&b, "  - %s\n", e.Name())
 	}
 	return fmt.Errorf("%s", strings.TrimRight(b.String(), "\n"))
 }
 
-func inspect(path, forceEngine string) (*Backup, error) {
+func inspect(path, forceEngine string) (*engine.Backup, error) {
 	size, head, compression, err := readHeader(path)
 	if err != nil {
 		return nil, err
 	}
-	b := &Backup{Path: path, Size: size, Compression: compression}
+	b := &engine.Backup{Path: path, Size: size, Compression: compression}
 
 	if forceEngine != "" {
-		eng, ok := Lookup(forceEngine)
+		eng, ok := engine.Lookup(forceEngine)
 		if !ok {
-			return nil, unknownEngineErr(forceEngine)
+			return nil, UnknownEngineErr(forceEngine)
 		}
 		m, _ := eng.Detect(head, path) // forçado: usa o que a engine conseguir extrair, mesmo sem reconhecer
 		b.Engine = eng.Name()
@@ -206,27 +189,14 @@ func inspect(path, forceEngine string) (*Backup, error) {
 		return b, nil
 	}
 
-	bestEngine, best, ok := chooseEngine(Engines(), head, path)
+	bestEngine, best, ok := chooseEngine(engine.Engines(), head, path)
 	if !ok {
-		return nil, noEngineErr(Engines())
+		return nil, noEngineErr(engine.Engines())
 	}
 	b.Engine = bestEngine.Name()
 	b.Format = best.Format
 	b.Version = best.Version
 	b.OriginDB = best.OriginDB
-	b.Guessed = best.Confidence <= ConfidenceGuess
+	b.Guessed = best.Confidence <= engine.ConfidenceGuess
 	return b, nil
-}
-
-func humanSize(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }

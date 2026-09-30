@@ -6,7 +6,7 @@
 
 Spec: `.scratch/monolito-modular/SPEC.md` (seções "Pacotes" e "Orquestração").
 
-**Blocked by:** 05
+**Blocked by:** 05b
 
 **Status:** ready-for-agent
 

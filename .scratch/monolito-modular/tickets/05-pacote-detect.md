@@ -8,10 +8,10 @@ Spec: `.scratch/monolito-modular/SPEC.md` (seções "Pacotes" e "Testing Decisio
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O pacote `detect` importa só `engine` dentre os pacotes do projeto.
-- [ ] Os testes com engine falsa moram no pacote `detect`.
-- [ ] Os testes de detecção com engines reais continuam na raiz e passam sem asserção alterada.
-- [ ] `testdata/headers/` continua um único diretório na raiz.
-- [ ] `./scripts/check full` passa.
+- [x] O pacote `detect` importa só `engine` dentre os pacotes do projeto.
+- [x] Os testes com engine falsa moram no pacote `detect`.
+- [x] Os testes de detecção com engines reais continuam na raiz e passam sem asserção alterada.
+- [x] `testdata/headers/` continua um único diretório na raiz.
+- [x] `./scripts/check full` passa.

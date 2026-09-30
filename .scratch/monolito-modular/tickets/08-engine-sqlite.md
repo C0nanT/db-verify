@@ -8,7 +8,7 @@ Cada engine que sai da raiz leva junto os seus testes unitários (que continuam 
 
 Spec: `.scratch/monolito-modular/SPEC.md` (seções "Pacotes", "Suíte de conformidade" e "Documentação").
 
-**Blocked by:** 02, 03, 07
+**Blocked by:** 02, 03, 05b, 07
 
 **Status:** ready-for-agent
 

@@ -10,7 +10,7 @@
 
 Spec: `.scratch/monolito-modular/SPEC.md` (seção "Fronteiras fiscalizadas").
 
-**Blocked by:** 05, 06, 08, 09, 10, 11, 12
+**Blocked by:** 05, 05b, 06, 08, 09, 10, 11, 12
 
 **Status:** ready-for-agent
 
