@@ -177,7 +177,7 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 
 	opts := engine.ProvisionOpts{
 		VersionTag: versionTag, Port: port, Jobs: jobs, DBName: dbName,
-		ExactCounts: exactCounts, Progress: step,
+		Progress: step,
 	}
 	sess, err := eng.Provision(ctx, backup, opts)
 	if err != nil {

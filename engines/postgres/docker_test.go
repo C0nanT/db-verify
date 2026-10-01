@@ -184,7 +184,7 @@ func TestFullFlow_Postgres(t *testing.T) {
 
 	ctx := context.Background()
 	sess, err := eng.Provision(ctx, backup, engine.ProvisionOpts{
-		Port: docker.FreePort(), Jobs: 4, DBName: "verify", ExactCounts: true,
+		Port: docker.FreePort(), Jobs: 4, DBName: "verify",
 	})
 	if err != nil {
 		t.Fatalf("Provision: %v", err)

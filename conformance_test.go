@@ -56,7 +56,7 @@ func TestEngineConformance(t *testing.T) {
 func conformanceProvisionOpts() engine.ProvisionOpts {
 	// Port 0 = mesmo que omitir --port: cada engine usa a própria janela
 	// (Postgres 55432, MySQL/MariaDB 3306, Redis 6379, Mongo 27017).
-	return engine.ProvisionOpts{Jobs: 4, DBName: "verify", ExactCounts: true}
+	return engine.ProvisionOpts{Jobs: 4, DBName: "verify"}
 }
 
 // testConformanceValid provisiona o backup mínimo declarado pela fixture e

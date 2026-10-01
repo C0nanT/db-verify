@@ -19,7 +19,7 @@ type Match struct {
 	Format     string
 	Version    string
 	OriginDB   string
-	Confidence int // 100 = magic bytes; 50 = extensão; 10 = palpite
+	Confidence int // um dos níveis ConfidenceMagic, ConfidenceExtension ou ConfidenceGuess
 }
 
 // Níveis de confiança padronizados que as engines usam em Detect, na ordem
@@ -52,11 +52,10 @@ type Backup struct {
 // ProvisionOpts carrega os parâmetros genéricos que hoje vêm de flags de
 // linha de comando. Cada engine decide o que faz sentido usar.
 type ProvisionOpts struct {
-	VersionTag  string
-	Port        int
-	Jobs        int
-	DBName      string
-	ExactCounts bool
+	VersionTag string
+	Port       int
+	Jobs       int
+	DBName     string
 	// Progress, quando não nil, é chamado com mensagens de progresso durante
 	// o provisionamento (subir container, aguardar, copiar, restaurar…),
 	// para o chamador (main.go) imprimir na mesma ordem de sempre.

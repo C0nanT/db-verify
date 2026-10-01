@@ -8,9 +8,9 @@ Spec: `.scratch/contrato-engine-limpeza/SPEC.md`.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] O comentário de `Match.Confidence` não repete nenhum valor numérico de confiança e cita as constantes `Confidence*`.
-- [ ] Os valores das constantes e a regra de desempate da detecção continuam iguais.
-- [ ] `./scripts/check fast` passa.
-- [ ] Achado 7 registrado como resolvido (ou parcial, se o ticket 01 ainda estiver aberto) no "Andamento" de `.scratch/tech-debt-map/core/2026-09-29.md`.
+- [x] O comentário de `Match.Confidence` não repete nenhum valor numérico de confiança e cita as constantes `Confidence*`.
+- [x] Os valores das constantes e a regra de desempate da detecção continuam iguais.
+- [x] `./scripts/check fast` passa.
+- [x] Achado 7 registrado como resolvido (ou parcial, se o ticket 01 ainda estiver aberto) no "Andamento" de `.scratch/tech-debt-map/core/2026-09-29.md`.

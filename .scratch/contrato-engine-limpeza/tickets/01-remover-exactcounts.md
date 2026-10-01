@@ -8,11 +8,11 @@ Spec: `.scratch/contrato-engine-limpeza/SPEC.md`.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] `ProvisionOpts` não tem mais o campo `ExactCounts`.
-- [ ] Nenhuma atribuição a `ExactCounts` sobrevive em código de produção, nos testes sem tag ou nos testes com tag `docker`.
-- [ ] O `main` continua passando a flag de contagem exata para `Session.Collections`, e a assinatura de `Collections` não muda.
-- [ ] `./scripts/check fast` passa.
-- [ ] `go vet -tags docker ./...` compila sem erro.
-- [ ] Achado 7 registrado como resolvido (ou parcial, se o ticket 02 ainda estiver aberto) no "Andamento" de `.scratch/tech-debt-map/core/2026-09-29.md`.
+- [x] `ProvisionOpts` não tem mais o campo `ExactCounts`.
+- [x] Nenhuma atribuição a `ExactCounts` sobrevive em código de produção, nos testes sem tag ou nos testes com tag `docker`.
+- [x] O `main` continua passando a flag de contagem exata para `Session.Collections`, e a assinatura de `Collections` não muda.
+- [x] `./scripts/check fast` passa.
+- [x] `go vet -tags docker ./...` compila sem erro.
+- [x] Achado 7 registrado como resolvido (ou parcial, se o ticket 02 ainda estiver aberto) no "Andamento" de `.scratch/tech-debt-map/core/2026-09-29.md`.
