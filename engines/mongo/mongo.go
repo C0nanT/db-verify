@@ -28,7 +28,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
@@ -42,8 +41,11 @@ import (
 	"db-verify/internal/docker"
 )
 
-// Engine implementa Engine para MongoDB.
-type Engine struct{}
+// Engine implementa Engine para MongoDB. Host é o acesso à CLI Docker; nil
+// usa o Docker de produção.
+type Engine struct {
+	Host *docker.DockerHost
+}
 
 func (Engine) Name() string { return "mongodb" }
 
@@ -137,19 +139,16 @@ var mongoSystemDBs = map[string]bool{"admin": true, "local": true, "config": tru
 // Provision sobe o container, espera o mongod ficar pronto, restaura o
 // archive via mongorestore lendo de stdin (sem arquivo intermediário dentro
 // do container) e conecta — mesmo formato grosso das demais engines.
-func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
-	if err := docker.DockerAvailable(ctx); err != nil {
+func (e Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
+	port, err := e.Host.Preflight(ctx, opts.Port, mongoDefaultPort)
+	if err != nil {
 		return nil, err
 	}
 
 	version := resolveMongoVersion(opts.VersionTag, b.Version)
-	port := opts.Port
-	if port == 0 {
-		port = docker.FreePortFrom(mongoDefaultPort)
-	}
-
 	cont := &mongoContainer{
-		Name:  fmt.Sprintf("db-verify-%d", os.Getpid()),
+		host:  e.Host,
+		Name:  docker.ContainerName(),
 		Image: "mongo:" + version,
 		Port:  port,
 	}
@@ -157,7 +156,7 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := e.Host.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
 	})
@@ -251,6 +250,7 @@ func mongoRestoredDBs(ctx context.Context, client *mongo.Client) ([]string, erro
 // archive. Sem usuário/senha: servidor descartável e efêmero, igual à
 // escolha do Redis (engines/redis/redis.go) — o container só escuta em 127.0.0.1.
 type mongoContainer struct {
+	host  *docker.DockerHost
 	Name  string
 	Image string
 	Port  int
@@ -270,7 +270,7 @@ func (c *mongoContainer) Start(ctx context.Context) error {
 		"-p", fmt.Sprintf("127.0.0.1:%d:27017", c.Port),
 		c.Image,
 	}
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	out, err := c.host.Docker(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("falha ao subir container: %s", strings.TrimSpace(string(out)))
 	}
@@ -302,8 +302,7 @@ func (c *mongoContainer) WaitReady(ctx context.Context, timeout time.Duration) e
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
-	logs, _ := exec.Command("docker", "logs", "--tail", "20", c.Name).CombinedOutput()
-	return fmt.Errorf("timeout esperando o MongoDB (%v):\n%s", lastErr, string(logs))
+	return fmt.Errorf("timeout esperando o MongoDB (%v):\n%s", lastErr, c.host.Logs(c.Name, 20))
 }
 
 // reMongoRestoreFailedLine reconhece as linhas de erro que o mongorestore
@@ -334,21 +333,16 @@ func (c *mongoContainer) Restore(ctx context.Context, b *engine.Backup, jobs int
 		fmt.Sprintf("--numParallelCollections=%d", jobs)}
 
 	start := time.Now()
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdin = r
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	runErr := cmd.Run()
+	out, runErr := c.host.DockerInput(ctx, r, args...)
 
 	res := &engine.RestoreResult{Duration: time.Since(start)}
-	if ee, ok := runErr.(*exec.ExitError); ok {
-		res.ExitCode = ee.ExitCode()
+	if code, ok := docker.ExitCode(runErr); ok {
+		res.ExitCode = code
 	} else if runErr != nil {
 		return nil, runErr
 	}
 
-	output := out.String()
+	output := string(out)
 	for _, line := range strings.Split(output, "\n") {
 		if reMongoRestoreFailedLine.MatchString(line) {
 			res.Errors = append(res.Errors, strings.TrimSpace(line))
@@ -375,7 +369,7 @@ func (c *mongoContainer) Restore(ctx context.Context, b *engine.Backup, jobs int
 }
 
 func (c *mongoContainer) Remove() {
-	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
+	c.host.Remove(c.Name)
 }
 
 // ------------------------------------------------------------- sessão ---

@@ -9,9 +9,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -24,8 +22,11 @@ import (
 	"db-verify/internal/relational"
 )
 
-// Engine implementa engine.Engine para PostgreSQL.
-type Engine struct{}
+// Engine implementa engine.Engine para PostgreSQL. Host é o acesso à CLI
+// Docker; nil usa o Docker de produção.
+type Engine struct {
+	Host *docker.DockerHost
+}
 
 func (Engine) Name() string { return "postgres" }
 
@@ -81,8 +82,9 @@ func (Engine) Expects() string {
 // conecta — deliberadamente grosso, para o número de seams continuar sendo
 // um. opts.Progress, se houver, é chamado a cada fase para o chamador
 // imprimir o mesmo acompanhamento de sempre.
-func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
-	if err := docker.DockerAvailable(ctx); err != nil {
+func (e Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
+	port, err := e.Host.Preflight(ctx, opts.Port, pgDefaultPort)
+	if err != nil {
 		return nil, err
 	}
 
@@ -93,13 +95,9 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 			version = "16"
 		}
 	}
-	port := opts.Port
-	if port == 0 {
-		port = docker.FreePortFrom(pgDefaultPort)
-	}
-
 	cont := &pgContainer{
-		Name:  fmt.Sprintf("db-verify-%d", os.Getpid()),
+		host:  e.Host,
+		Name:  docker.ContainerName(),
 		Image: "postgres:" + version + "-alpine",
 		Port:  port, DB: opts.DBName, User: "postgres", Pass: "postgres",
 	}
@@ -107,7 +105,7 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := e.Host.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
 	})
@@ -178,6 +176,7 @@ const pgDefaultPort = 55432
 
 // pgContainer representa o Postgres temporário usado para validar o backup.
 type pgContainer struct {
+	host  *docker.DockerHost
 	Name  string
 	Image string
 	Port  int
@@ -202,52 +201,27 @@ func (c *pgContainer) Start(ctx context.Context) error {
 		c.Image,
 		"-c", "fsync=off", "-c", "full_page_writes=off", "-c", "synchronous_commit=off",
 	}
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	out, err := c.host.Docker(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("falha ao subir container: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
-// WaitReady espera pg_isready responder duas vezes seguidas, com um respiro
-// entre elas — a imagem oficial sobe um "servidor temporário" (sem rede,
-// só socket Unix) para rodar os scripts de inicialização e só depois
-// reinicia para o servidor real; um pg_isready bem-sucedido contra o
-// temporário dá falso positivo (o restore em seguida falha com "No such
-// file or directory" no socket, no meio do reinício). A segunda checagem,
-// mesmo padrão do MySQL/MariaDB (ver engines/mysql/mysql.go), evita isso.
+// WaitReady espera pg_isready responder duas vezes seguidas — a imagem
+// oficial sobe um "servidor temporário" (sem rede, só socket Unix) para
+// rodar os scripts de inicialização e só depois reinicia para o servidor
+// real; um pg_isready bem-sucedido contra o temporário dá falso positivo (o
+// restore em seguida falha com "No such file or directory" no socket, no
+// meio do reinício). A dupla checagem mora em DockerHost.WaitReady.
 func (c *pgContainer) WaitReady(ctx context.Context, timeout time.Duration) error {
-	check := func() bool {
-		return exec.CommandContext(ctx, "docker", "exec", c.Name,
-			"pg_isready", "-U", c.User, "-d", c.DB).Run() == nil
-	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if check() {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(300 * time.Millisecond):
-			}
-			if check() {
-				return nil
-			}
-			continue
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	logs, _ := exec.Command("docker", "logs", "--tail", "20", c.Name).CombinedOutput()
-	return fmt.Errorf("timeout esperando o Postgres:\n%s", string(logs))
+	return c.host.WaitReady(ctx, c.Name, "Postgres", timeout, "pg_isready", "-U", c.User, "-d", c.DB)
 }
 
 // CopyDump joga o arquivo dentro do container, descomprimindo se preciso.
 func (c *pgContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 	if b.Compression == "none" {
-		out, err := exec.CommandContext(ctx, "docker", "cp", b.Path, c.Name+":/tmp/backup.dump").CombinedOutput()
+		out, err := c.host.Docker(ctx, "cp", b.Path, c.Name+":/tmp/backup.dump")
 		if err != nil {
 			return fmt.Errorf("docker cp falhou: %s", strings.TrimSpace(string(out)))
 		}
@@ -259,20 +233,10 @@ func (c *pgContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 	}
 	defer r.Close()
 
-	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", c.Name, "sh", "-c", "cat > /tmp/backup.dump")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	_, copyErr := io.Copy(stdin, r)
-	stdin.Close()
-	if err := cmd.Wait(); err != nil {
+	if _, err := c.host.DockerInput(ctx, r, "exec", "-i", c.Name, "sh", "-c", "cat > /tmp/backup.dump"); err != nil {
 		return fmt.Errorf("falha ao copiar dump: %w", err)
 	}
-	return copyErr
+	return nil
 }
 
 var reRestoreErr = regexp.MustCompile(`(?im)^(pg_restore: )?(error|erro):|^ERROR:`)
@@ -287,11 +251,11 @@ func (c *pgContainer) Restore(ctx context.Context, b *engine.Backup, jobs int) (
 		args = []string{"exec", c.Name, "pg_restore", "-U", c.User, "-d", c.DB,
 			"--no-owner", "--no-privileges", fmt.Sprintf("--jobs=%d", jobs), "/tmp/backup.dump"}
 	}
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	out, err := c.host.Docker(ctx, args...)
 
 	res := &engine.RestoreResult{Duration: time.Since(start)}
-	if ee, ok := err.(*exec.ExitError); ok {
-		res.ExitCode = ee.ExitCode()
+	if code, ok := docker.ExitCode(err); ok {
+		res.ExitCode = code
 	} else if err != nil {
 		return nil, err
 	}
@@ -311,7 +275,7 @@ func (c *pgContainer) Restore(ctx context.Context, b *engine.Backup, jobs int) (
 }
 
 func (c *pgContainer) Remove() {
-	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
+	c.host.Remove(c.Name)
 }
 
 // ------------------------------------------------------------- session ---

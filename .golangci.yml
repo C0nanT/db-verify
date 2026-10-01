@@ -32,6 +32,18 @@ linters-settings:
             desc: engine não importa a interface do terminal
           - pkg: db-verify/internal/detect
             desc: engine não importa a detecção
+      # A CLI Docker de produção passa só por internal/docker (DockerHost).
+      # Ficam de fora as fixtures de conformidade e os testes com tag docker,
+      # que montam backups de origem com containers próprios.
+      engines-sem-exec:
+        files:
+          - "**/engines/**"
+          - "!$test"
+          - "!**/conformance.go"
+          - "!**/*_conformance.go"
+        deny:
+          - pkg: os/exec
+            desc: engine não roda processo direto; use o *docker.DockerHost recebido em Engine.Host
       # ui e detect dependem só do contrato (internal/engine), nunca de uma
       # engine concreta.
       contrato-apenas:

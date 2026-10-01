@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -20,7 +19,10 @@ import (
 // RequireDocker pula o teste quando o daemon Docker não está disponível.
 func RequireDocker(t *testing.T) {
 	t.Helper()
-	if err := docker.DockerAvailable(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var host docker.DockerHost
+	if err := host.Available(ctx); err != nil {
 		t.Skipf("docker indisponível: %v", err)
 	}
 }
@@ -28,7 +30,9 @@ func RequireDocker(t *testing.T) {
 // ContainerExists diz se existe um container com esse nome, em qualquer
 // estado (Created/Exited inclusive, não só rodando): usa `docker inspect`.
 func ContainerExists(name string) bool {
-	return exec.Command("docker", "inspect", name).Run() == nil
+	var host docker.DockerHost
+	_, err := host.Docker(context.Background(), "inspect", name)
+	return err == nil
 }
 
 // UniqueName gera um nome de container único por processo e instante, para

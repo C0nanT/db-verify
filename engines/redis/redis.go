@@ -21,14 +21,12 @@ package redis
 
 import (
 	"archive/tar"
-	"bytes"
 	"context"
 	"db-verify/internal/dumpio"
 	"db-verify/internal/engine"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
@@ -40,8 +38,11 @@ import (
 	"db-verify/internal/docker"
 )
 
-// Engine implementa Engine para Redis.
-type Engine struct{}
+// Engine implementa Engine para Redis. Host é o acesso à CLI Docker; nil
+// usa o Docker de produção.
+type Engine struct {
+	Host *docker.DockerHost
+}
 
 func (Engine) Name() string { return "redis" }
 
@@ -115,19 +116,16 @@ const redisDefaultPort = 6379
 // de ordem em relação às outras engines (Start/CopyDump/Restore) porque o
 // Redis só carrega o RDB durante a inicialização — colocar o arquivo depois
 // do start não faz efeito nenhum.
-func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
-	if err := docker.DockerAvailable(ctx); err != nil {
+func (e Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
+	port, err := e.Host.Preflight(ctx, opts.Port, redisDefaultPort)
+	if err != nil {
 		return nil, err
 	}
 
 	version := redisResolveVersion(opts.VersionTag, b.Version)
-	port := opts.Port
-	if port == 0 {
-		port = docker.FreePortFrom(redisDefaultPort)
-	}
-
 	cont := &redisContainer{
-		Name:  fmt.Sprintf("db-verify-%d", os.Getpid()),
+		host:  e.Host,
+		Name:  docker.ContainerName(),
 		Image: "redis:" + version + "-alpine",
 		Port:  port,
 	}
@@ -135,7 +133,7 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 	if err := opts.Step(ctx, "criando container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := e.Host.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		if err := cont.Create(ctx); err != nil {
 			return err
@@ -210,6 +208,7 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 // só adicionaria fricção ao --keep sem nenhum benefício de segurança real
 // (o container só escuta em 127.0.0.1).
 type redisContainer struct {
+	host  *docker.DockerHost
 	Name  string
 	Image string
 	Port  int
@@ -231,7 +230,7 @@ func (c *redisContainer) Create(ctx context.Context) error {
 		c.Image,
 		"redis-server", "--save", "", "--appendonly", "no",
 	}
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	out, err := c.host.Docker(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("falha ao criar container: %s", strings.TrimSpace(string(out)))
 	}
@@ -239,7 +238,7 @@ func (c *redisContainer) Create(ctx context.Context) error {
 }
 
 func (c *redisContainer) StartContainer(ctx context.Context) error {
-	out, err := exec.CommandContext(ctx, "docker", "start", c.Name).CombinedOutput()
+	out, err := c.host.Docker(ctx, "start", c.Name)
 	if err != nil {
 		return fmt.Errorf("falha ao subir container: %s", strings.TrimSpace(string(out)))
 	}
@@ -288,7 +287,8 @@ func (c *redisContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 
 // streamDumpTar envia o conteúdo de path (com o tamanho já conhecido, size)
 // como um único arquivo "dump.rdb" dentro de um stream tar, via stdin de
-// `docker cp -`.
+// `docker cp -`. O tar é escrito numa goroutine do outro lado de um io.Pipe;
+// quando o docker sai antes de ler tudo, fechar o leitor destrava a escrita.
 func (c *redisContainer) streamDumpTar(ctx context.Context, path string, size int64) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -296,33 +296,29 @@ func (c *redisContainer) streamDumpTar(ctx context.Context, path string, size in
 	}
 	defer f.Close()
 
-	cmd := exec.CommandContext(ctx, "docker", "cp", "-", c.Name+":/data/")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	tw := tar.NewWriter(stdin)
-	writeErr := func() error {
-		if err := tw.WriteHeader(&tar.Header{Name: "dump.rdb", Mode: 0o644, Size: size}); err != nil {
-			return err
-		}
-		if _, err := io.Copy(tw, f); err != nil {
-			return err
-		}
-		return tw.Close()
+	pr, pw := io.Pipe()
+	writeErr := make(chan error, 1)
+	go func() {
+		tw := tar.NewWriter(pw)
+		err := func() error {
+			if err := tw.WriteHeader(&tar.Header{Name: "dump.rdb", Mode: 0o644, Size: size}); err != nil {
+				return err
+			}
+			if _, err := io.Copy(tw, f); err != nil {
+				return err
+			}
+			return tw.Close()
+		}()
+		pw.Close()
+		writeErr <- err
 	}()
-	stdin.Close()
-	waitErr := cmd.Wait()
-	if waitErr != nil {
-		return fmt.Errorf("docker cp falhou: %s", strings.TrimSpace(stderr.String()))
+	out, runErr := c.host.DockerInput(ctx, pr, "cp", "-", c.Name+":/data/")
+	pr.Close()
+	wErr := <-writeErr
+	if runErr != nil {
+		return fmt.Errorf("docker cp falhou: %s", strings.TrimSpace(string(out)))
 	}
-	return writeErr
+	return wErr
 }
 
 // WaitReady espera o servidor responder, mas sem esperar cegamente até o
@@ -336,7 +332,7 @@ func (c *redisContainer) WaitReady(ctx context.Context, timeout time.Duration) *
 	start := time.Now()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if exec.CommandContext(ctx, "docker", "exec", c.Name, "redis-cli", "PING").Run() == nil {
+		if _, err := c.host.Docker(ctx, "exec", c.Name, "redis-cli", "PING"); err == nil {
 			return &engine.RestoreResult{Duration: time.Since(start)}
 		}
 		if !c.isRunning() {
@@ -352,7 +348,7 @@ func (c *redisContainer) WaitReady(ctx context.Context, timeout time.Duration) *
 }
 
 func (c *redisContainer) isRunning() bool {
-	out, err := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", c.Name).Output()
+	out, err := c.host.Docker(context.Background(), "inspect", "-f", "{{.State.Running}}", c.Name)
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
@@ -360,12 +356,12 @@ func (c *redisContainer) isRunning() bool {
 // sempre com o log completo do container salvo em arquivo — é esse log,
 // não uma mensagem genérica de timeout, que diagnostica um RDB corrompido.
 func (c *redisContainer) failureResult(start time.Time, summary string) *engine.RestoreResult {
-	logs, _ := exec.Command("docker", "logs", c.Name).CombinedOutput()
+	logs := c.host.Logs(c.Name, 0)
 	res := &engine.RestoreResult{
 		Duration: time.Since(start),
 		Errors:   []string{summary},
 	}
-	if out, err := exec.Command("docker", "inspect", "-f", "{{.State.ExitCode}}", c.Name).Output(); err == nil {
+	if out, err := c.host.Docker(context.Background(), "inspect", "-f", "{{.State.ExitCode}}", c.Name); err == nil {
 		if n, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil {
 			res.ExitCode = n
 		}
@@ -379,7 +375,7 @@ func (c *redisContainer) failureResult(start time.Time, summary string) *engine.
 }
 
 func (c *redisContainer) Remove() {
-	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
+	c.host.Remove(c.Name)
 }
 
 // ------------------------------------------------------------- sessão ---

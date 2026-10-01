@@ -21,17 +21,17 @@ package mysql
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"regexp"
-	"time"
 
 	"db-verify/internal/docker"
 	"db-verify/internal/engine"
 )
 
-// MariaDBEngine implementa Engine para MariaDB.
-type MariaDBEngine struct{}
+// MariaDBEngine implementa Engine para MariaDB. Host é o acesso à CLI
+// Docker; nil usa o Docker de produção.
+type MariaDBEngine struct {
+	Host *docker.DockerHost
+}
 
 func (MariaDBEngine) Name() string { return "mariadb" }
 
@@ -84,92 +84,10 @@ func (MariaDBEngine) Expects() string {
 }
 
 // Provision sobe o container, espera ficar pronto, copia o dump, restaura e
-// conecta — mesmo formato grosso das demais engines. Reusa mysqlContainer e
-// mysqlSession inteiros; só Image e Client mudam.
-func (MariaDBEngine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
-	if err := docker.DockerAvailable(ctx); err != nil {
-		return nil, err
-	}
-
+// conecta — mesmo formato grosso das demais engines. Reusa
+// provisionMySQLFamily (mysqlContainer e mysqlSession inteiros); só Image e
+// Client mudam.
+func (e MariaDBEngine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	version := mariadbResolveVersion(opts.VersionTag, b.Version)
-	port := opts.Port
-	if port == 0 {
-		port = docker.FreePortFrom(mysqlDefaultPort)
-	}
-	db := opts.DBName
-	if db == "" {
-		db = "verify"
-	}
-
-	cont := &mysqlContainer{
-		Name:   fmt.Sprintf("db-verify-%d", os.Getpid()),
-		Image:  "mariadb:" + version,
-		Client: "mariadb",
-		Port:   port, DB: db, User: "root", Pass: "root",
-	}
-
-	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
-		return nil, err
-	}
-	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
-		cont.Port = p
-		return cont.Start(ctx)
-	})
-	if err != nil {
-		return nil, err
-	}
-	if finalPort != port {
-		if err := opts.Step(ctx, "porta %d livre, usando essa…", finalPort); err != nil {
-			cont.Remove()
-			return nil, err
-		}
-	}
-	if err := opts.Step(ctx, "aguardando o MariaDB ficar pronto…"); err != nil {
-		cont.Remove()
-		return nil, err
-	}
-	if err := cont.WaitReady(ctx, 120*time.Second); err != nil {
-		cont.Remove()
-		return nil, err
-	}
-	if err := opts.Step(ctx, "copiando dump para o container…"); err != nil {
-		cont.Remove()
-		return nil, err
-	}
-	if err := cont.CopyDump(ctx, b); err != nil {
-		cont.Remove()
-		return nil, err
-	}
-	if err := opts.Step(ctx, "restaurando (pode demorar)…"); err != nil {
-		cont.Remove()
-		return nil, err
-	}
-	res, err := cont.Restore(ctx)
-	if err == nil {
-		// Ctrl+C no terminal também derruba o `docker exec` filho, que
-		// devolve ExitError (vira res, não erro): o ctx é quem diz.
-		err = ctx.Err()
-	}
-	if err != nil {
-		res.DiscardLog()
-		cont.Remove()
-		return nil, err
-	}
-
-	conn, err := mysqlConnect(cont.DSN())
-	if err != nil {
-		res.DiscardLog()
-		cont.Remove()
-		return nil, fmt.Errorf("conexão falhou: %w", err)
-	}
-	// mysqlConnect não recebe ctx: sem esta checagem, um cancelamento
-	// durante a conexão devolveria uma Session.
-	if err := ctx.Err(); err != nil {
-		conn.Close()
-		res.DiscardLog()
-		cont.Remove()
-		return nil, err
-	}
-
-	return &mysqlSession{db: conn, cont: cont, restore: res}, nil
+	return provisionMySQLFamily(ctx, e.Host, b, opts, "mariadb:"+version, "mariadb", "MariaDB")
 }

@@ -1,14 +1,17 @@
 // Pacote docker concentra o host Docker: scan de porta, parse de conflito,
-// retry, rm do nome fixo, docker ps na faixa, prompt ao operador e “daemon
-// responde?”.
-// Engines Docker chamam daqui; a policy Engine/Session não conhece CLI
-// Docker nem stdin. Produção usa exec + stdin/stderr reais; testes
-// substituem Run, o leitor do prompt e Listen.
+// retry, rm do nome fixo, docker ps na faixa, prompt ao operador, “daemon
+// responde?” e o ciclo de vida do container (run/cp/exec/rm/logs, espera de
+// prontidão). Engines Docker recebem um *DockerHost e não chamam a CLI
+// Docker por conta própria; a policy Engine/Session não conhece CLI Docker
+// nem stdin. Produção usa exec + stdin/stderr reais; testes substituem Run,
+// RunInput, o leitor do prompt e Listen.
 package docker
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -32,14 +35,21 @@ const removeTimeout = 10 * time.Second
 // dockerRun executa `docker args...` e devolve stdout+stderr juntos.
 type dockerRun func(ctx context.Context, args ...string) ([]byte, error)
 
+// dockerRunInput é dockerRun com stdin vindo de um io.Reader (stream de dump
+// para `docker exec -i`/`docker cp -`).
+type dockerRunInput func(ctx context.Context, stdin io.Reader, args ...string) ([]byte, error)
+
 // dockerListen tenta abrir um TCP listen (scan de porta livre).
 type dockerListen func(network, address string) (net.Listener, error)
 
-// DockerHost concentra I/O de porta + CLI Docker. Campos nil caem no
-// comportamento de produção (LookPath/exec/Listen/os.Stdin/Stderr/Stdout).
+// DockerHost é o caminho único das engines para a CLI Docker: porta,
+// daemon, ciclo de vida do container (run/cp/exec/rm/logs) e espera de
+// prontidão. Campos nil — e um *DockerHost nil — caem no comportamento de
+// produção (LookPath/exec/Listen/os.Stdin/Stderr/Stdout).
 type DockerHost struct {
 	LookPath func(file string) (string, error)
 	Run      dockerRun
+	RunInput dockerRunInput
 	Listen   dockerListen
 	Stdin    io.Reader
 	Stderr   io.Writer
@@ -59,6 +69,21 @@ func (h *DockerHost) run() dockerRun {
 	}
 	return func(ctx context.Context, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	}
+}
+
+func (h *DockerHost) runInput() dockerRunInput {
+	if h != nil && h.RunInput != nil {
+		return h.RunInput
+	}
+	return func(ctx context.Context, stdin io.Reader, args ...string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, "docker", args...)
+		cmd.Stdin = stdin
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &out
+		err := cmd.Run()
+		return out.Bytes(), err
 	}
 }
 
@@ -90,44 +115,110 @@ func (h *DockerHost) stdout() io.Writer {
 	return os.Stdout
 }
 
-// defaultDockerHost é o host de produção usado pelas engines.
-var defaultDockerHost = &DockerHost{}
-
 // dockerCheckTimeout limita a checagem do Docker: daemon travado não pode
 // bloquear o Provision para sempre.
 const dockerCheckTimeout = 10 * time.Second
 
-// DockerAvailable aplica dockerCheckTimeout sobre o ctx do Provision.
-//
-// Função global presa ao defaultDockerHost: só existe porque as engines
-// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
-// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
-// quando o achado 10 for tratado.
-func DockerAvailable(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, dockerCheckTimeout)
+// ContainerName é o nome fixo do container de verificação deste processo.
+func ContainerName() string {
+	return fmt.Sprintf("db-verify-%d", os.Getpid())
+}
+
+// ExitCode extrai o exit code de um erro devolvido por Docker/DockerInput
+// quando o processo rodou e saiu com código != 0 (em produção,
+// *exec.ExitError). ok=false: o erro é de outra natureza (binário ausente,
+// ctx cancelado antes de subir…).
+func ExitCode(err error) (code int, ok bool) {
+	var ee interface{ ExitCode() int }
+	if errors.As(err, &ee) {
+		return ee.ExitCode(), true
+	}
+	return 0, false
+}
+
+// Preflight é o prólogo comum do Provision: confere o daemon (com
+// dockerCheckTimeout sobre o ctx do Provision) e escolhe a porta inicial —
+// port quando veio de --port, senão a primeira livre a partir de defaultPort.
+func (h *DockerHost) Preflight(ctx context.Context, port, defaultPort int) (int, error) {
+	checkCtx, cancel := context.WithTimeout(ctx, dockerCheckTimeout)
 	defer cancel()
-	return defaultDockerHost.Available(ctx)
+	if err := h.Available(checkCtx); err != nil {
+		return 0, err
+	}
+	if port == 0 {
+		port = h.FreePortFrom(defaultPort)
+	}
+	return port, nil
 }
 
-// FreePortFrom procura a primeira porta livre a partir de start (inclusive),
-// numa janela de 100 portas — porta padrão do engine quando estiver livre.
-//
-// Função global presa ao defaultDockerHost: só existe porque as engines
-// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
-// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
-// quando o achado 10 for tratado.
-func FreePortFrom(start int) int {
-	return defaultDockerHost.FreePortFrom(start)
+// Docker executa `docker args...` e devolve stdout+stderr juntos.
+func (h *DockerHost) Docker(ctx context.Context, args ...string) ([]byte, error) {
+	return h.run()(ctx, args...)
 }
 
-// StartWithPortRetry roda o retry por conflito de porta no defaultDockerHost.
-//
-// Função global presa ao defaultDockerHost: só existe porque as engines
-// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
-// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
-// quando o achado 10 for tratado.
-func StartWithPortRetry(ctx context.Context, name string, startPort int, attempt func(port int) error) (int, error) {
-	return defaultDockerHost.StartWithPortRetry(ctx, name, startPort, attempt)
+// DockerInput é Docker com stdin lido de r. Um erro de leitura de r (dump
+// corrompido no meio da descompressão) volta como erro.
+func (h *DockerHost) DockerInput(ctx context.Context, r io.Reader, args ...string) ([]byte, error) {
+	return h.runInput()(ctx, r, args...)
+}
+
+// Remove roda `rm -f name`, ignorando erro: é idempotente, o container pode
+// nem existir. Sem ctx de propósito: é chamado por Session.Close e por
+// caminhos de falha em que o ctx do chamador já pode estar cancelado.
+func (h *DockerHost) Remove(name string) {
+	_, _ = h.run()(context.Background(), "rm", "-f", name)
+}
+
+// Logs devolve stdout+stderr do container; tail > 0 limita às últimas
+// linhas. Sem ctx, como Remove: serve para diagnosticar falhas depois que o
+// ctx do chamador já pode ter acabado.
+func (h *DockerHost) Logs(name string, tail int) []byte {
+	args := []string{"logs"}
+	if tail > 0 {
+		args = append(args, "--tail", strconv.Itoa(tail))
+	}
+	out, _ := h.run()(context.Background(), append(args, name)...)
+	return out
+}
+
+// WaitReady roda `docker exec name probe...` até a sonda ter sucesso duas
+// vezes seguidas, com um respiro entre elas. As imagens oficiais de Postgres
+// e MySQL/MariaDB sobem um "servidor temporário" para rodar a inicialização
+// e só depois reiniciam para o servidor real: uma sonda bem-sucedida contra o
+// temporário dá falso positivo, e testar bem na fronteira do reinício pode
+// achar o socket fechado logo depois de uma sonda ter funcionado — daí a
+// segunda checagem. Esgotado o timeout, o erro traz as últimas 20 linhas do
+// log do container; what nomeia o servidor na mensagem.
+func (h *DockerHost) WaitReady(ctx context.Context, name, what string, timeout time.Duration, probe ...string) error {
+	args := append([]string{"exec", name}, probe...)
+	check := func() bool {
+		_, err := h.run()(ctx, args...)
+		return err == nil
+	}
+	sleep := func(d time.Duration) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(d):
+			return nil
+		}
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if check() {
+			if err := sleep(300 * time.Millisecond); err != nil {
+				return err
+			}
+			if check() {
+				return nil
+			}
+			continue
+		}
+		if err := sleep(min(time.Second, time.Until(deadline))); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("timeout esperando o %s:\n%s", what, h.Logs(name, 20))
 }
 
 // Available verifica se o binário docker está no PATH e o daemon responde.

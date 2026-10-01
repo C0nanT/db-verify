@@ -24,9 +24,7 @@ import (
 	"db-verify/internal/engine"
 	"db-verify/internal/relational"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -37,8 +35,11 @@ import (
 	"db-verify/internal/docker"
 )
 
-// Engine implementa Engine para MySQL.
-type Engine struct{}
+// Engine implementa Engine para MySQL. Host é o acesso à CLI Docker; nil
+// usa o Docker de produção.
+type Engine struct {
+	Host *docker.DockerHost
+}
 
 func (Engine) Name() string { return "mysql" }
 
@@ -120,15 +121,17 @@ func (Engine) Expects() string {
 // Provision sobe o container, espera ficar pronto, copia o dump, restaura e
 // conecta — mesmo formato grosso de postgres.Engine.Provision, para o número de
 // seams continuar sendo um.
-func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
-	if err := docker.DockerAvailable(ctx); err != nil {
-		return nil, err
-	}
-
+func (e Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.ProvisionOpts) (engine.Session, error) {
 	version := mysqlResolveVersion(opts.VersionTag, b.Version)
-	port := opts.Port
-	if port == 0 {
-		port = docker.FreePortFrom(mysqlDefaultPort)
+	return provisionMySQLFamily(ctx, e.Host, b, opts, "mysql:"+version, "mysql", "MySQL")
+}
+
+// provisionMySQLFamily é o Provision comum a MySQL e MariaDB (mariadb.go):
+// só a imagem, o binário de cliente e o rótulo das mensagens mudam.
+func provisionMySQLFamily(ctx context.Context, host *docker.DockerHost, b *engine.Backup, opts engine.ProvisionOpts, image, client, label string) (engine.Session, error) {
+	port, err := host.Preflight(ctx, opts.Port, mysqlDefaultPort)
+	if err != nil {
+		return nil, err
 	}
 	db := opts.DBName
 	if db == "" {
@@ -136,16 +139,17 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 	}
 
 	cont := &mysqlContainer{
-		Name:   fmt.Sprintf("db-verify-%d", os.Getpid()),
-		Image:  "mysql:" + version,
-		Client: "mysql",
+		host:   host,
+		Name:   docker.ContainerName(),
+		Image:  image,
+		Client: client,
 		Port:   port, DB: db, User: "root", Pass: "root",
 	}
 
 	if err := opts.Step(ctx, "subindo container %s (imagem %s)…", cont.Name, cont.Image); err != nil {
 		return nil, err
 	}
-	finalPort, err := docker.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
+	finalPort, err := host.StartWithPortRetry(ctx, cont.Name, port, func(p int) error {
 		cont.Port = p
 		return cont.Start(ctx)
 	})
@@ -158,7 +162,7 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 			return nil, err
 		}
 	}
-	if err := opts.Step(ctx, "aguardando o MySQL ficar pronto…"); err != nil {
+	if err := opts.Step(ctx, "aguardando o %s ficar pronto…", label); err != nil {
 		cont.Remove()
 		return nil, err
 	}
@@ -219,6 +223,7 @@ const mysqlDefaultPort = 3306
 // implementação servir as duas, com Image e Client sendo o que cada engine
 // decide de diferente (ver SPEC.md, tabela "Por engine").
 type mysqlContainer struct {
+	host  *docker.DockerHost
 	Name  string
 	Image string
 	// Client é o binário do cliente de linha de comando usado para o
@@ -252,7 +257,7 @@ func (c *mysqlContainer) Start(ctx context.Context) error {
 		"--innodb-doublewrite=0",
 		"--skip-log-bin",
 	}
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	out, err := c.host.Docker(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("falha ao subir container: %s", strings.TrimSpace(string(out)))
 	}
@@ -264,43 +269,18 @@ func (c *mysqlContainer) Start(ctx context.Context) error {
 // oficial sobe um "servidor temporário" para rodar a inicialização (que já
 // responde ping, sem a senha de root definitiva) e só depois reinicia para
 // o servidor real. Um ping bem-sucedido contra o temporário dá falso
-// positivo (o restore que vem em seguida falharia com "Access denied"), e
-// testar bem na fronteira do reinício pode achar o socket momentaneamente
-// fechado logo depois de uma consulta ter funcionado — daí a segunda
-// checagem, com um respiro entre elas.
+// positivo (o restore que vem em seguida falharia com "Access denied"). A
+// dupla checagem mora em DockerHost.WaitReady.
 func (c *mysqlContainer) WaitReady(ctx context.Context, timeout time.Duration) error {
-	check := func() bool {
-		return exec.CommandContext(ctx, "docker", "exec", c.Name,
-			c.Client, "-u"+c.User, "-p"+c.Pass, "-e", "SELECT 1").Run() == nil
-	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if check() {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(300 * time.Millisecond):
-			}
-			if check() {
-				return nil
-			}
-			continue
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	logs, _ := exec.Command("docker", "logs", "--tail", "20", c.Name).CombinedOutput()
-	return fmt.Errorf("timeout esperando o %s:\n%s", c.Client, string(logs))
+	return c.host.WaitReady(ctx, c.Name, c.Client, timeout,
+		c.Client, "-u"+c.User, "-p"+c.Pass, "-e", "SELECT 1")
 }
 
 // CopyDump joga o arquivo dentro do container, descomprimindo se preciso —
 // sempre por stream, nunca duplicando o dump inteiro em disco no host.
 func (c *mysqlContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 	if b.Compression == "none" {
-		out, err := exec.CommandContext(ctx, "docker", "cp", b.Path, c.Name+":/tmp/backup.sql").CombinedOutput()
+		out, err := c.host.Docker(ctx, "cp", b.Path, c.Name+":/tmp/backup.sql")
 		if err != nil {
 			return fmt.Errorf("docker cp falhou: %s", strings.TrimSpace(string(out)))
 		}
@@ -312,20 +292,10 @@ func (c *mysqlContainer) CopyDump(ctx context.Context, b *engine.Backup) error {
 	}
 	defer r.Close()
 
-	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", c.Name, "sh", "-c", "cat > /tmp/backup.sql")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	_, copyErr := io.Copy(stdin, r)
-	stdin.Close()
-	if err := cmd.Wait(); err != nil {
+	if _, err := c.host.DockerInput(ctx, r, "exec", "-i", c.Name, "sh", "-c", "cat > /tmp/backup.sql"); err != nil {
 		return fmt.Errorf("falha ao copiar dump: %w", err)
 	}
-	return copyErr
+	return nil
 }
 
 // reMySQLFamilyRestoreErr reconhece as linhas de erro do cliente mysql/
@@ -341,11 +311,11 @@ var reMySQLFamilyRestoreErr = regexp.MustCompile(`(?m)^ERROR\b`)
 func (c *mysqlContainer) Restore(ctx context.Context) (*engine.RestoreResult, error) {
 	start := time.Now()
 	shell := fmt.Sprintf("%s --force -u%s -p%s %s < /tmp/backup.sql", c.Client, c.User, c.Pass, c.DB)
-	out, err := exec.CommandContext(ctx, "docker", "exec", c.Name, "sh", "-c", shell).CombinedOutput()
+	out, err := c.host.Docker(ctx, "exec", c.Name, "sh", "-c", shell)
 
 	res := &engine.RestoreResult{Duration: time.Since(start)}
-	if ee, ok := err.(*exec.ExitError); ok {
-		res.ExitCode = ee.ExitCode()
+	if code, ok := docker.ExitCode(err); ok {
+		res.ExitCode = code
 	} else if err != nil {
 		return nil, err
 	}
@@ -365,7 +335,7 @@ func (c *mysqlContainer) Restore(ctx context.Context) (*engine.RestoreResult, er
 }
 
 func (c *mysqlContainer) Remove() {
-	_ = exec.Command("docker", "rm", "-f", c.Name).Run()
+	c.host.Remove(c.Name)
 }
 
 // ------------------------------------------------------------- session ---

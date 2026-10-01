@@ -65,7 +65,7 @@ wrong way. Decisions and rationale: `docs/adr/0001-monolito-modular.md`.
 | `main` (root) | flags, `run()`, the explicit engine list (`engines.go`), tests of the assembled set | all |
 | `internal/engine` | `Engine`/`Session` interfaces, shared types (`Match`, `Backup`, `ProvisionOpts`, `Collection`, `Health`, `ResultSet`…), `HumanSize`, registry (`Register`, `Engines`, `Lookup`) | none |
 | `internal/relational` | order-column heuristic shared by relational engines | `engine` |
-| `internal/docker` | `DockerHost`: daemon check, free ports, port-conflict retry | — |
+| `internal/docker` | `DockerHost`: the only path to the Docker CLI — daemon check, free ports, port-conflict retry, container lifecycle (run/cp/exec/rm/logs), readiness wait | — |
 | `internal/dumpio` | `OpenMaybeCompressed` (gzip/zstd/bzip2) | none |
 | `internal/detect` | header reading, engine contest, `InspectDump` | `engine`, `dumpio` |
 | `internal/ui` | backup picker and bubbletea TUI | `engine`, `detect` |
@@ -156,7 +156,7 @@ When applying a principle would require reshaping modules outside the current fl
 - **Policy** — `internal/engine` (the `Engine`/`Session` interfaces, `Match`/`Backup`/`Collection`/`Health` types, the registry) and `internal/relational` (heuristics shared by relational engines).
 - **Details** — the engine packages (`engines/postgres`, `engines/mysql` (MySQL + MariaDB), `engines/mongo`, `engines/redis`, `engines/sqlite`), each implementing `Engine`/`Session` against Docker and a specific DB driver/CLI.
 - **Wiring** — the explicit list in `engines.go` (root) is the only place that names concrete engines and their tie-break order; `internal/ui` and `internal/detect` depend only on `internal/engine` and the `Engines()`/`Lookup()` registry.
-- **Boundary enforcement** — the `depguard` rules in `.golangci.yml` (run by `scripts/check fast`): an engine does not import another engine, `internal/ui` or `internal/detect`; `ui` and `detect` do not import any `engines/*` package; `engine` and `dumpio` import no other project package. Shared code goes to `relational`, `docker` or `dumpio`, not across engines.
+- **Boundary enforcement** — the `depguard` rules in `.golangci.yml` (run by `scripts/check fast`): an engine does not import another engine, `internal/ui` or `internal/detect`; `ui` and `detect` do not import any `engines/*` package; `engine` and `dumpio` import no other project package; engine production code does not import `os/exec` (Docker goes through the `Host *docker.DockerHost` field each engine struct carries, nil = production). Shared code goes to `relational`, `docker` or `dumpio`, not across engines.
 - **Test substitution** — tests implement `Engine`/`Session` with fakes (e.g. `fakeEngine` in `internal/detect/detect_test.go`) instead of standing up a real container.
 
 ### The principles, as architecture rules

@@ -19,10 +19,10 @@ package main
 import (
 	"context"
 	"db-verify/internal/detect"
+	"db-verify/internal/docker"
 	"db-verify/internal/engine"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"testing"
 
@@ -256,8 +256,8 @@ func testConformanceCancel(t *testing.T, eng engine.Engine, fx conformance.Confo
 
 	// Todas as engines usam o mesmo nome; um vazamento aqui faria os
 	// Provision seguintes falharem por nome em uso, então sempre removemos.
-	name := fmt.Sprintf("db-verify-%d", os.Getpid())
-	forceRemove := func() { _ = exec.Command("docker", "rm", "-f", name).Run() }
+	name := docker.ContainerName()
+	forceRemove := func() { new(docker.DockerHost).Remove(name) }
 	t.Cleanup(forceRemove)
 	requireNoContainer := func(t *testing.T, when string) {
 		t.Helper()

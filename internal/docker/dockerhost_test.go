@@ -476,3 +476,140 @@ func TestDockerHost_FreePortFrom_ListenInjetado(t *testing.T) {
 		t.Fatalf("porta %d", p)
 	}
 }
+
+func TestDockerHost_Preflight(t *testing.T) {
+	t.Parallel()
+	ok := func(string) (string, error) { return "/usr/bin/docker", nil }
+	run := func(context.Context, ...string) ([]byte, error) { return nil, nil }
+	listen := func(_, address string) (net.Listener, error) {
+		if address == "127.0.0.1:5001" {
+			return fakeListener{}, nil
+		}
+		return nil, errors.New("bind")
+	}
+	h := &DockerHost{LookPath: ok, Run: run, Listen: listen}
+	if p, err := h.Preflight(context.Background(), 0, 5000); err != nil || p != 5001 {
+		t.Fatalf("porta omitida: %d, %v", p, err)
+	}
+	if p, err := h.Preflight(context.Background(), 7000, 5000); err != nil || p != 7000 {
+		t.Fatalf("--port explícito: %d, %v", p, err)
+	}
+	down := &DockerHost{
+		LookPath: ok,
+		Run:      func(context.Context, ...string) ([]byte, error) { return nil, errors.New("cannot connect") },
+		Listen: func(string, string) (net.Listener, error) {
+			t.Fatal("não procurar porta com daemon fora")
+			return nil, nil
+		},
+	}
+	if _, err := down.Preflight(context.Background(), 0, 5000); err == nil {
+		t.Fatal("esperava erro com daemon fora")
+	}
+}
+
+type exitErr int
+
+func (e exitErr) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+func (e exitErr) ExitCode() int { return int(e) }
+
+func TestExitCode(t *testing.T) {
+	t.Parallel()
+	if code, ok := ExitCode(fmt.Errorf("restore: %w", exitErr(3))); !ok || code != 3 {
+		t.Fatalf("encadeado: %d, %v", code, ok)
+	}
+	if _, ok := ExitCode(errors.New("executable file not found")); ok {
+		t.Fatal("erro sem exit code reconhecido como saída do processo")
+	}
+	if _, ok := ExitCode(nil); ok {
+		t.Fatal("nil reconhecido como saída do processo")
+	}
+}
+
+func TestDockerHost_DockerInput_RepassaStdin(t *testing.T) {
+	t.Parallel()
+	var got string
+	var gotArgs []string
+	h := &DockerHost{RunInput: func(_ context.Context, r io.Reader, args ...string) ([]byte, error) {
+		b, err := io.ReadAll(r)
+		got, gotArgs = string(b), args
+		return []byte("out"), err
+	}}
+	out, err := h.DockerInput(context.Background(), strings.NewReader("dump"), "exec", "-i", "c", "cat")
+	if err != nil || string(out) != "out" || got != "dump" || strings.Join(gotArgs, " ") != "exec -i c cat" {
+		t.Fatalf("out=%q err=%v stdin=%q args=%v", out, err, got, gotArgs)
+	}
+}
+
+func TestDockerHost_RemoveELogs(t *testing.T) {
+	t.Parallel()
+	rec := &recRun{fn: func(_ context.Context, args ...string) ([]byte, error) {
+		if args[0] == "logs" {
+			return []byte("log"), nil
+		}
+		return nil, errors.New("No such container")
+	}}
+	h := &DockerHost{Run: rec.Run}
+	h.Remove("c")
+	if !rec.has("rm", "-f", "c") {
+		t.Fatalf("rm -f ausente: %v", rec.calls)
+	}
+	if got := string(h.Logs("c", 20)); got != "log" || !rec.has("logs", "--tail", "20", "c") {
+		t.Fatalf("logs com tail: %q %v", got, rec.calls)
+	}
+	h.Logs("c", 0)
+	if !rec.has("logs", "c") {
+		t.Fatalf("logs sem tail: %v", rec.calls)
+	}
+}
+
+func TestDockerHost_WaitReady_ExigeDuasSondasSeguidas(t *testing.T) {
+	t.Parallel()
+	// falha, sucesso, falha (reinício do servidor temporário), sucesso, sucesso.
+	script := []error{errors.New("down"), nil, errors.New("restarting"), nil, nil}
+	var mu sync.Mutex
+	rec := &recRun{fn: func(context.Context, ...string) ([]byte, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		err := script[0]
+		script = script[1:]
+		return nil, err
+	}}
+	h := &DockerHost{Run: rec.Run}
+	if err := h.WaitReady(context.Background(), "c", "Postgres", 30*time.Second, "pg_isready", "-U", "postgres"); err != nil {
+		t.Fatal(err)
+	}
+	if n := rec.countPrefix("exec"); n != 5 {
+		t.Fatalf("sondas = %d, queria 5", n)
+	}
+	if !rec.has("exec", "c", "pg_isready", "-U", "postgres") {
+		t.Fatalf("sonda errada: %v", rec.calls)
+	}
+}
+
+func TestDockerHost_WaitReady_TimeoutTrazLogs(t *testing.T) {
+	t.Parallel()
+	rec := &recRun{fn: func(_ context.Context, args ...string) ([]byte, error) {
+		if args[0] == "logs" {
+			return []byte("FATAL: boom"), nil
+		}
+		return nil, errors.New("down")
+	}}
+	h := &DockerHost{Run: rec.Run}
+	err := h.WaitReady(context.Background(), "c", "MySQL", 50*time.Millisecond, "mysql", "-e", "SELECT 1")
+	if err == nil || !strings.Contains(err.Error(), "timeout esperando o MySQL") || !strings.Contains(err.Error(), "FATAL: boom") {
+		t.Fatalf("erro: %v", err)
+	}
+	if !rec.has("logs", "--tail", "20", "c") {
+		t.Fatalf("logs ausentes: %v", rec.calls)
+	}
+}
+
+func TestDockerHost_WaitReady_CtxCancelado(t *testing.T) {
+	t.Parallel()
+	h := &DockerHost{Run: func(context.Context, ...string) ([]byte, error) { return nil, errors.New("down") }}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := h.WaitReady(ctx, "c", "Postgres", time.Minute, "true"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("erro: %v", err)
+	}
+}

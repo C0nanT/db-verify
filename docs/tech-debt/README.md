@@ -12,7 +12,7 @@ silêncio.
 
 | Módulo | Paths | Origem | Última revisão | Relatório | Abertos |
 | ------ | ----- | ------ | -------------- | --------- | ------- |
-| core | `internal/engine/`, `internal/relational/`, `internal/docker/`, `internal/conformance/`, `conformance_test.go`, `engines.go` | pacotes | 2026-09-29 | `.scratch/tech-debt-map/core/2026-09-29.md` | 9 |
+| core | `internal/engine/`, `internal/relational/`, `internal/docker/`, `internal/conformance/`, `conformance_test.go`, `engines.go` | pacotes | 2026-09-29 | `.scratch/tech-debt-map/core/2026-09-29.md` | 0 |
 | detection | `internal/detect/`, `internal/dumpio/`, `detect_test.go`, `dump_test.go`, `testdata/**` | pacotes | — | — | — |
 | cli-ui | `main.go`, `main_test.go`, `port_flag_test.go`, `internal/ui/` | pacotes | — | — | — |
 | postgres | `engines/postgres/` | pacotes | — | — | — |
@@ -43,3 +43,8 @@ não a um módulo. A seção só cresce: acrescente, não reescreva.
   de ordenação, limite de "recentes" e janelas de porta ficam em constantes e
   funções de `internal/engine`/`internal/relational`, não como literais repetidos por
   engine. _(core, 2026-09-29)_
+- **`os/exec` proibido no código de produção das engines.** A regra `depguard`
+  `engines-sem-exec` (`.golangci.yml`, rodada por `scripts/check fast`) aplica
+  o guardrail "CLI Docker só via `DockerHost`": cada engine recebe o host em
+  `Engine.Host` (nil = produção). Testes e fixtures de conformidade
+  (`conformance.go`, `*_conformance.go`) ficam fora da regra. _(core, 2026-10-01)_
