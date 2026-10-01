@@ -250,6 +250,9 @@ func (h *DockerHost) containersUsingPorts(ctx context.Context, ports []int) ([]p
 			"--filter", fmt.Sprintf("publish=%d", p),
 			"--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Ports}}")
 		if err != nil {
+			if msg := strings.TrimSpace(string(out)); msg != "" {
+				return nil, fmt.Errorf("%s: %w", msg, err)
+			}
 			return nil, err
 		}
 		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
@@ -273,7 +276,12 @@ func (h *DockerHost) containersUsingPorts(ctx context.Context, ports []int) ([]p
 
 func (h *DockerHost) offerToFreePort(ctx context.Context, tried []int) (bool, error) {
 	containers, err := h.containersUsingPorts(ctx, tried)
-	if err != nil || len(containers) == 0 {
+	if err != nil {
+		// Falha do `docker ps` não é "nenhum container na faixa": reportá-la
+		// como falta de porta livre daria ao operador o diagnóstico errado.
+		return false, fmt.Errorf("listar containers nas portas %v: %w", tried, err)
+	}
+	if len(containers) == 0 {
 		return false, nil
 	}
 

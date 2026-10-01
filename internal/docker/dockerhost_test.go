@@ -234,6 +234,34 @@ func TestStartWithPortRetry_EsgotaSemContainerVaiAoErro(t *testing.T) {
 	}
 }
 
+func TestStartWithPortRetry_EsgotaPsFalhaPropagaErro(t *testing.T) {
+	t.Parallel()
+	psErr := errors.New("exit status 1")
+	rec := &recRun{fn: func(ctx context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "ps" {
+			return []byte("permission denied while trying to connect to the Docker daemon socket\n"), psErr
+		}
+		return nil, nil
+	}}
+	var stdout bytes.Buffer
+	h := &DockerHost{Run: rec.Run, Stderr: io.Discard, Stdout: &stdout, Stdin: strings.NewReader("1\n")}
+	attempt, _ := scriptAttempt(conflictErr(), conflictErr(), conflictErr(), conflictErr(), conflictErr())
+	_, err := h.StartWithPortRetry(context.Background(), "c", 10, attempt)
+	if err == nil {
+		t.Fatal("queria erro")
+	}
+	if strings.Contains(err.Error(), "nenhuma porta livre") {
+		t.Fatalf("falha do docker ps virou diagnóstico de porta: %v", err)
+	}
+	if !errors.Is(err, psErr) || !strings.Contains(err.Error(), "listar containers nas portas [10 11 12 13 14]") ||
+		!strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("erro: %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("não deveria mostrar prompt: %q", stdout.String())
+	}
+}
+
 func TestStartWithPortRetry_EnterNaoLiberta(t *testing.T) {
 	t.Parallel()
 	psLine := "abc\tzombie\tpostgres:16\t0.0.0.0:10->5432/tcp\n"
