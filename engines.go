@@ -12,7 +12,9 @@ import (
 // Esta é a única lista de engines do binário. A ordem importa:
 // no desempate de detecção (mesma confiança), vence a engine que aparece
 // primeiro aqui. Mantenha-a estável ao adicionar engines novas (no fim, ou
-// onde o desempate desejado exigir).
+// onde o desempate desejado exigir). Esse desempate é só rede de segurança:
+// TestNoDetectTies (detect_test.go) proíbe empate nas fixtures de
+// testdata/headers/, e engine.Register entra em pânico com nome duplicado.
 //
 // É um inicializador de variável de pacote, não um init() nem um trecho de
 // main(): assim roda antes de qualquer uso do registro tanto no binário

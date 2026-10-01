@@ -211,7 +211,18 @@ type Session interface {
 var registry []Engine
 
 // Register cadastra uma engine. Chamado pela lista explícita em engines.go (pacote main).
+//
+// Regras: Name() é único no registro (Lookup e as fixtures de conformidade
+// indexam por nome), então um nome repetido entra em pânico na inicialização
+// em vez de passar calado. A ordem de registro só desempata a detecção como
+// último recurso: TestNoDetectTies (raiz) falha se duas engines devolverem a
+// mesma confiança máxima para alguma fixture de testdata/headers/.
 func Register(e Engine) {
+	for _, r := range registry {
+		if r.Name() == e.Name() {
+			panic(fmt.Sprintf("engine.Register: nome duplicado %q", e.Name()))
+		}
+	}
 	registry = append(registry, e)
 }
 

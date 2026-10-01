@@ -88,3 +88,22 @@ func TestRegistry(t *testing.T) {
 		t.Fatal("Lookup(nenhuma) achou algo")
 	}
 }
+
+// TestRegister_NomeDuplicadoEntraEmPanico: um Name() repetido (copiar e
+// colar uma engine) não pode entrar calado no registro.
+func TestRegister_NomeDuplicadoEntraEmPanico(t *testing.T) {
+	saved := registry
+	registry = nil
+	t.Cleanup(func() { registry = saved })
+
+	Register(fakeEngine{"a"})
+	defer func() {
+		if recover() == nil {
+			t.Fatal("Register com nome duplicado não entrou em pânico")
+		}
+		if len(registry) != 1 {
+			t.Fatalf("registro tem %d engines depois do pânico, want 1", len(registry))
+		}
+	}()
+	Register(fakeEngine{"a"})
+}

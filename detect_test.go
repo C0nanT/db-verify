@@ -11,6 +11,9 @@ package main
 
 import (
 	"db-verify/internal/detect"
+	"db-verify/internal/dumpio"
+	"db-verify/internal/engine"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,6 +156,51 @@ func TestInspectDump_Bzip2(t *testing.T) {
 			}
 			if info.OriginDB != tc.wantOrigin {
 				t.Errorf("OriginDB = %q, want %q", info.OriginDB, tc.wantOrigin)
+			}
+		})
+	}
+}
+
+// TestNoDetectTies: para cada fixture de testdata/headers/, no máximo uma
+// engine registrada pode devolver a confiança máxima. Assim o destino de um
+// arquivo não depende da ordem da lista em engines.go — uma engine nova que
+// empate com outra (ex.: reivindicar .sql por extensão) quebra aqui.
+func TestNoDetectTies(t *testing.T) {
+	entries, err := os.ReadDir("testdata/headers")
+	if err != nil {
+		t.Fatalf("lendo testdata/headers: %v", err)
+	}
+	for _, ent := range entries {
+		if ent.IsDir() {
+			continue
+		}
+		path := filepath.Join("testdata/headers", ent.Name())
+		t.Run(ent.Name(), func(t *testing.T) {
+			r, _, err := dumpio.OpenMaybeCompressed(path)
+			if err != nil {
+				t.Fatalf("abrindo %s: %v", path, err)
+			}
+			defer r.Close()
+			head := make([]byte, 8192)
+			n, _ := io.ReadFull(r, head)
+			head = head[:n]
+
+			best := -1
+			var winners []string
+			for _, e := range engine.Engines() {
+				m, ok := e.Detect(head, path)
+				if !ok {
+					continue
+				}
+				switch {
+				case m.Confidence > best:
+					best, winners = m.Confidence, []string{e.Name()}
+				case m.Confidence == best:
+					winners = append(winners, e.Name())
+				}
+			}
+			if len(winners) > 1 {
+				t.Errorf("empate em confiança %d entre %v", best, winners)
 			}
 		})
 	}
