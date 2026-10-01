@@ -210,14 +210,14 @@ func sqliteStringLiteral(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
-// sqliteRecentQuery monta o SELECT dos 20 registros mais recentes da
+// sqliteRecentQuery monta o SELECT dos engine.RecentLimit registros mais recentes da
 // tabela — sem schema/namespace: SQLite não tem um equivalente a
 // "database.tabela" para um único arquivo.
 func sqliteRecentQuery(table string, d sqliteDescriptor) string {
 	if d.OrderCol == "" {
-		return fmt.Sprintf("SELECT * FROM %s LIMIT 20;", sqliteIdent(table))
+		return fmt.Sprintf("SELECT * FROM %s LIMIT %d;", sqliteIdent(table), engine.RecentLimit)
 	}
-	return fmt.Sprintf("SELECT * FROM %s ORDER BY %s DESC LIMIT 20;", sqliteIdent(table), sqliteIdent(d.OrderCol))
+	return fmt.Sprintf("SELECT * FROM %s ORDER BY %s DESC LIMIT %d;", sqliteIdent(table), sqliteIdent(d.OrderCol), engine.RecentLimit)
 }
 
 type sqliteSession struct {

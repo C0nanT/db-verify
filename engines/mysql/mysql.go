@@ -402,13 +402,13 @@ func mysqlIdent(s string) string {
 	return "`" + strings.ReplaceAll(s, "`", "``") + "`"
 }
 
-// mysqlRecentQuery monta o SELECT dos 20 registros mais recentes da tabela.
+// mysqlRecentQuery monta o SELECT dos engine.RecentLimit registros mais recentes da tabela.
 func mysqlRecentQuery(db, table string, d mysqlDescriptor) string {
 	if d.OrderCol == "" {
-		return fmt.Sprintf("SELECT * FROM %s.%s LIMIT 20;", mysqlIdent(db), mysqlIdent(table))
+		return fmt.Sprintf("SELECT * FROM %s.%s LIMIT %d;", mysqlIdent(db), mysqlIdent(table), engine.RecentLimit)
 	}
-	return fmt.Sprintf("SELECT * FROM %s.%s ORDER BY %s DESC LIMIT 20;",
-		mysqlIdent(db), mysqlIdent(table), mysqlIdent(d.OrderCol))
+	return fmt.Sprintf("SELECT * FROM %s.%s ORDER BY %s DESC LIMIT %d;",
+		mysqlIdent(db), mysqlIdent(table), mysqlIdent(d.OrderCol), engine.RecentLimit)
 }
 
 type mysqlSession struct {

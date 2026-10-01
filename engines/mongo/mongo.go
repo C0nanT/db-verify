@@ -439,7 +439,7 @@ func mongoOrderHint(field string) string {
 	return fmt.Sprintf("ordenado por %s (data)", field)
 }
 
-// mongoRecentQuery monta o comando mongosh copiável dos 20 documentos mais
+// mongoRecentQuery monta o comando mongosh copiável dos engine.RecentLimit documentos mais
 // recentes da coleção — "use <db>;" na frente porque um archive pode conter
 // várias databases, e db.<coleção>.find() sozinho assume a corrente.
 func mongoRecentQuery(dbName, coll string, d mongoDescriptor) string {
@@ -447,10 +447,8 @@ func mongoRecentQuery(dbName, coll string, d mongoDescriptor) string {
 	if d.OrderField != "" {
 		field = d.OrderField
 	}
-	return fmt.Sprintf("use %s; db.%s.find().sort({%s: -1}).limit(%d)", dbName, coll, field, mongoRecentLimit)
+	return fmt.Sprintf("use %s; db.%s.find().sort({%s: -1}).limit(%d)", dbName, coll, field, engine.RecentLimit)
 }
-
-const mongoRecentLimit = 20
 
 // mongoFlattenDepth é a profundidade fixa até onde documentos aninhados são
 // achatados em caminho pontilhado (ticket 09) — além dela, o sub-documento
@@ -696,7 +694,7 @@ func (s *mongoSession) Recent(ctx context.Context, c engine.Collection) (*engine
 
 	start := time.Now()
 	col := s.client.Database(c.Namespace).Collection(c.Name)
-	cur, err := col.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{Key: field, Value: -1}}).SetLimit(mongoRecentLimit))
+	cur, err := col.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{Key: field, Value: -1}}).SetLimit(engine.RecentLimit))
 	if err != nil {
 		return nil, err
 	}

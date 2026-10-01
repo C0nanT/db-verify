@@ -194,10 +194,18 @@ type Engine interface {
 	Provision(ctx context.Context, b *Backup, opts ProvisionOpts) (Session, error)
 }
 
+// RecentLimit é o número máximo de linhas que Session.Recent devolve. Engines
+// e TUI usam esta constante em vez de repetir o literal.
+const RecentLimit = 20
+
 // Session é a conexão viva com o backup restaurado.
 type Session interface {
 	Health(ctx context.Context) (*Health, error)
 	Collections(ctx context.Context, exact bool) ([]Collection, error)
+	// Recent devolve no máximo RecentLimit linhas da coleção, as mais
+	// recentes primeiro (ordem decrescente) quando a Collection tem coluna
+	// de ordenação por data. Sem ela, a ordem é a do fallback da engine
+	// (PK, _id, nome de chave…), descrito em Collection.Hint.
 	Recent(ctx context.Context, c Collection) (*ResultSet, error)
 	Query(ctx context.Context, raw string) (*ResultSet, error)
 	ConnectHint() ConnectHint

@@ -391,12 +391,12 @@ type pgDescriptor struct {
 	ByDate   bool
 }
 
-// pgRecentQuery monta o SELECT dos 20 registros mais recentes da tabela.
+// pgRecentQuery monta o SELECT dos engine.RecentLimit registros mais recentes da tabela.
 func pgRecentQuery(namespace, name string, d pgDescriptor) string {
 	if d.OrderCol == "" {
-		return fmt.Sprintf(`SELECT * FROM %q.%q LIMIT 20;`, namespace, name)
+		return fmt.Sprintf(`SELECT * FROM %q.%q LIMIT %d;`, namespace, name, engine.RecentLimit)
 	}
-	return fmt.Sprintf(`SELECT * FROM %q.%q ORDER BY %q DESC LIMIT 20;`, namespace, name, d.OrderCol)
+	return fmt.Sprintf(`SELECT * FROM %q.%q ORDER BY %q DESC LIMIT %d;`, namespace, name, d.OrderCol, engine.RecentLimit)
 }
 
 type pgSession struct {

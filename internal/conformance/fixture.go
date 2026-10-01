@@ -24,8 +24,9 @@ type ConformanceBackup struct {
 	// contagem exata de cada uma (a coleção vazia entra com 0).
 	WantCollections map[string]int64
 	// DateCollection é o nome da coleção com coluna de data, usada para
-	// verificar o limite de 20 linhas e a ordem decrescente de Recent.
-	// Precisa ter mais de 20 linhas para exercitar o limite de verdade.
+	// verificar o limite de engine.RecentLimit linhas e a ordem decrescente
+	// de Recent. Precisa ter mais de engine.RecentLimit linhas para
+	// exercitar o limite de verdade.
 	DateCollection string
 	// DateColumn é a coluna usada para ordenar DateCollection; os valores
 	// que Recent devolve para ela precisam ordenar corretamente como string

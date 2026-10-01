@@ -137,7 +137,7 @@ func testConformanceValid(t *testing.T, eng engine.Engine, fx conformance.Confor
 		}
 	})
 
-	t.Run("Recent: no máximo 20 linhas, ordem decrescente na coleção com data", func(t *testing.T) {
+	t.Run("Recent: no máximo RecentLimit linhas, ordem decrescente na coleção com data", func(t *testing.T) {
 		c, ok := conformance.CollectionByName(collections, cb.DateCollection)
 		if !ok {
 			t.Fatalf("coleção com data %q não apareceu na listagem", cb.DateCollection)
@@ -149,8 +149,8 @@ func testConformanceValid(t *testing.T, eng engine.Engine, fx conformance.Confor
 		if len(rs.Rows) == 0 {
 			t.Fatal("Recent não devolveu nenhuma linha")
 		}
-		if len(rs.Rows) > 20 {
-			t.Fatalf("len(rs.Rows) = %d, want <= 20", len(rs.Rows))
+		if len(rs.Rows) > engine.RecentLimit {
+			t.Fatalf("len(rs.Rows) = %d, want <= %d", len(rs.Rows), engine.RecentLimit)
 		}
 		colIdx := -1
 		for i, col := range rs.Columns {

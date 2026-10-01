@@ -411,8 +411,7 @@ const (
 	// e barata, extrapolada por DBSIZE.
 	redisSampleScanLimit = int64(2_000)
 
-	redisRecentSampleSize = 20   // linhas mostradas no painel direito
-	redisSampleGatherCap  = 5000 // teto de chaves examinadas ao montar a amostra de UM grupo
+	redisSampleGatherCap = 5000 // teto de chaves examinadas ao montar a amostra de UM grupo
 )
 
 // redisGroupOf devolve o grupo de uma chave: tudo antes do primeiro
@@ -640,7 +639,7 @@ func redisHint(truncated bool) string {
 
 // Recent devolve uma amostra de chaves do grupo — "mais recente" não existe
 // no Redis (ticket 07). A amostra é ordenada por nome de chave em ordem
-// decrescente antes de aplicar o limite de 20: determinístico, e alinhado
+// decrescente antes de aplicar o limite de engine.RecentLimit: determinístico, e alinhado
 // com a convenção real mais comum de nomear chaves com um sufixo crescente
 // (id, timestamp) — a chave "maior" tende a ser a mais nova.
 func (s *redisSession) Recent(ctx context.Context, c engine.Collection) (*engine.ResultSet, error) {
@@ -680,8 +679,8 @@ func (s *redisSession) sampleGroup(ctx context.Context, group string) (*engine.R
 	}
 
 	sort.Sort(sort.Reverse(sort.StringSlice(keys)))
-	if len(keys) > redisRecentSampleSize {
-		keys = keys[:redisRecentSampleSize]
+	if len(keys) > engine.RecentLimit {
+		keys = keys[:engine.RecentLimit]
 	}
 
 	rs := &engine.ResultSet{Columns: []string{"chave", "tipo", "ttl", "preview"}, Query: nativeCmd, Language: "redis"}

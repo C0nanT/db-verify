@@ -103,7 +103,7 @@ func NewModel(sess engine.Session, backup *engine.Backup, health *engine.Health,
 
 func (m *model) Init() tea.Cmd { return m.loadCurrent() }
 
-// loadCurrent dispara a consulta dos 20 mais recentes da coleção sob o cursor.
+// loadCurrent dispara a consulta dos engine.RecentLimit mais recentes da coleção sob o cursor.
 func (m *model) loadCurrent() tea.Cmd {
 	if len(m.collections) == 0 {
 		return nil
@@ -426,7 +426,7 @@ func (m *model) viewResult() string {
 	}
 	c := m.collections[m.cursor]
 
-	head := StTitle.Render("20 mais recentes · " + c.Qualified())
+	head := StTitle.Render(fmt.Sprintf("%d mais recentes · %s", engine.RecentLimit, c.Qualified()))
 	hint := StDim.Render(c.Hint)
 
 	queryText := c.Preview
