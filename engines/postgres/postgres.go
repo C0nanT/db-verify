@@ -95,7 +95,7 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 	}
 	port := opts.Port
 	if port == 0 {
-		port = docker.FreePort()
+		port = docker.FreePortFrom(pgDefaultPort)
 	}
 
 	cont := &pgContainer{
@@ -169,6 +169,12 @@ func (Engine) Provision(ctx context.Context, b *engine.Backup, opts engine.Provi
 }
 
 // ---------------------------------------------------------- container ---
+
+// pgDefaultPort é o início da janela de portas do Postgres quando --port não
+// veio. Fica fora do 5432 de propósito: evita colidir com um Postgres local e
+// impede que um psql sem -p caia no banco do host em vez do container de
+// verificação.
+const pgDefaultPort = 55432
 
 // pgContainer representa o Postgres temporário usado para validar o backup.
 type pgContainer struct {

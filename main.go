@@ -23,7 +23,7 @@ import (
 )
 
 // portFlagUsage descreve --port: valor explícito é a primeira tentativa;
-// omitido, a janela da engine (Postgres 55432, demais a porta padrão).
+// omitido, a janela da engine (constante <engine>DefaultPort do seu pacote).
 const portFlagUsage = "porta no host (explícito: primeira tentativa; omitido: janela da engine)"
 
 func main() {

@@ -20,11 +20,8 @@ import (
 	"time"
 )
 
-// postgresPortWindow é o início da janela Postgres quando --port não veio.
-const postgresPortWindow = 55432
-
 // maxPortRetries é quantas portas seguidas StartWithPortRetry tenta antes de
-// oferecer ao operador derrubar um container. FreePort/FreePortFrom já
+// oferecer ao operador derrubar um container. FreePortFrom já
 // evitam a maioria dos conflitos no host, mas resta a corrida entre o
 // listen e o docker publicar — e --port pula o scan.
 const maxPortRetries = 5
@@ -110,16 +107,6 @@ func DockerAvailable(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, dockerCheckTimeout)
 	defer cancel()
 	return defaultDockerHost.Available(ctx)
-}
-
-// FreePort procura uma porta livre a partir de 55432 (janela Postgres).
-//
-// Função global presa ao defaultDockerHost: só existe porque as engines
-// ainda não recebem o DockerHost injetado (achado 10 do mapa de dívida; ver o
-// guardrail "CLI Docker só via DockerHost" em docs/tech-debt/README.md). Sai
-// quando o achado 10 for tratado.
-func FreePort() int {
-	return defaultDockerHost.FreePortFrom(postgresPortWindow)
 }
 
 // FreePortFrom procura a primeira porta livre a partir de start (inclusive),

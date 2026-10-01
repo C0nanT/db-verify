@@ -184,7 +184,7 @@ func TestFullFlow_Postgres(t *testing.T) {
 
 	ctx := context.Background()
 	sess, err := eng.Provision(ctx, backup, engine.ProvisionOpts{
-		Port: docker.FreePort(), Jobs: 4, DBName: "verify",
+		Port: docker.FreePortFrom(pgDefaultPort), Jobs: 4, DBName: "verify",
 	})
 	if err != nil {
 		t.Fatalf("Provision: %v", err)
@@ -342,7 +342,7 @@ func TestContainerKeep(t *testing.T) {
 	cont := &pgContainer{
 		Name:  conformance.UniqueName("keep"),
 		Image: "postgres:16-alpine",
-		Port:  docker.FreePort(),
+		Port:  docker.FreePortFrom(pgDefaultPort),
 		DB:    "verify",
 		User:  "postgres",
 		Pass:  "postgres",
