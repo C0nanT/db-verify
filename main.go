@@ -261,8 +261,14 @@ func run(path, versionTag, engineName string, port, jobs int, dbName string, kee
 	return nil
 }
 
-// defaultDataDir resolve a pasta "data" ao lado do binário (raiz do projeto).
+// defaultDataDir resolve a pasta de backups: ./data do diretório atual ou, sem
+// ela, data/ ao lado do binário. Com go install, o binário fica em GOPATH/bin, e
+// por isso o diretório atual vem primeiro.
 func defaultDataDir() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
@@ -271,5 +277,19 @@ func defaultDataDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(filepath.Dir(exe), "data"), nil
+	return chooseDataDir(filepath.Join(cwd, "data"), filepath.Join(filepath.Dir(exe), "data")), nil
+}
+
+// chooseDataDir devolve local se for uma pasta; senão beside, se for uma pasta;
+// senão local, para o erro de leitura citar o caminho que o usuário espera.
+func chooseDataDir(local, beside string) string {
+	if isDir(local) || !isDir(beside) {
+		return local
+	}
+	return beside
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
