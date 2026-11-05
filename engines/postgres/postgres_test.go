@@ -16,6 +16,8 @@ package postgres
 import (
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestPGRecentQuery caracteriza o SQL produzido para os 20 mais recentes,
@@ -55,29 +57,40 @@ func TestPGRecentQuery(t *testing.T) {
 }
 
 // TestFormatValue caracteriza a formatação de valores usada para preencher
-// o painel de resultados: nulo, date, timestamp, binário e string com
-// quebra de linha.
+// o painel de resultados: nulo, date, timestamp, texto do Postgres e string
+// com quebra de linha. A leitura de cada tipo real fica em docker_test.go.
 func TestFormatValue(t *testing.T) {
 	midnight := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
 	withTime := time.Date(2024, 3, 15, 13, 45, 30, 0, time.UTC)
 
 	cases := []struct {
 		name string
+		oid  uint32
 		in   any
+		text string
 		want string
 	}{
-		{"nulo", nil, "∅"},
-		{"date (hora zerada vira só a data)", midnight, "2024-03-15"},
-		{"timestamp com hora", withTime, "2024-03-15 13:45:30"},
-		{"binário", []byte{0xde, 0xad, 0xbe, 0xef}, `\xdeadbeef`},
-		{"string com quebra de linha é achatada", "linha um\nlinha dois\n\tlinha três", "linha um linha dois linha três"},
-		{"string simples", "ok", "ok"},
+		{"date (hora zerada vira só a data)", pgtype.DateOID, midnight, "2024-03-15", "2024-03-15"},
+		{"timestamp com hora", pgtype.TimestampOID, withTime, "2024-03-15 13:45:30.5", "2024-03-15 13:45:30"},
+		{"timestamptz usa o fuso local", pgtype.TimestamptzOID, withTime, "2024-03-15 13:45:30+00", withTime.Local().Format("2006-01-02 15:04:05")},
+		{"data antes de Cristo fica como o Postgres escreve", pgtype.DateOID, time.Date(-43, 3, 15, 0, 0, 0, 0, time.UTC), "0044-03-15 BC", "0044-03-15 BC"},
+		{"numeric usa o texto, não o struct", pgtype.NumericOID, pgtype.Numeric{Valid: true}, "79.90", "79.90"},
+		{"binário", pgtype.ByteaOID, []byte{0xde, 0xad, 0xbe, 0xef}, `\xdeadbeef`, `\xdeadbeef`},
+		{"string com quebra de linha é achatada", pgtype.TextOID, "x", "linha um\nlinha dois\n\tlinha três", "linha um linha dois linha três"},
+		{"string simples", pgtype.TextOID, "ok", "ok", "ok"},
+		{"booleano por extenso", pgtype.BoolOID, true, "t", "true"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := formatValue(tc.in); got != tc.want {
-				t.Errorf("formatValue(%#v) = %q, want %q", tc.in, got, tc.want)
+			if got := formatValue(tc.oid, tc.in, []byte(tc.text)); got != tc.want {
+				t.Errorf("formatValue(%d, %#v, %q) = %q, want %q", tc.oid, tc.in, tc.text, got, tc.want)
 			}
 		})
 	}
+
+	t.Run("nulo", func(t *testing.T) {
+		if got := formatValue(pgtype.NumericOID, nil, nil); got != "∅" {
+			t.Errorf("got %q, want ∅", got)
+		}
+	})
 }

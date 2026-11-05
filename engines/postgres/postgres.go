@@ -11,9 +11,12 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/C0nanT/db-verify/internal/docker"
@@ -445,14 +448,17 @@ func (s *pgSession) Query(ctx context.Context, raw string) (*engine.ResultSet, e
 
 func (s *pgSession) runQuery(ctx context.Context, sql string) (*engine.ResultSet, error) {
 	start := time.Now()
-	rows, err := s.pool.Query(ctx, sql)
+	// Formato texto: cada valor chega como o próprio Postgres o escreve. No formato
+	// binário, tipos como numeric, interval e uuid viram structs Go sem leitura humana.
+	rows, err := s.pool.Query(ctx, sql, pgx.QueryResultFormats{pgx.TextFormatCode})
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	rs := &engine.ResultSet{Query: sql, Language: "sql"}
-	for _, fd := range rows.FieldDescriptions() {
+	fields := rows.FieldDescriptions()
+	for _, fd := range fields {
 		rs.Columns = append(rs.Columns, string(fd.Name))
 	}
 	for rows.Next() {
@@ -460,9 +466,10 @@ func (s *pgSession) runQuery(ctx context.Context, sql string) (*engine.ResultSet
 		if err != nil {
 			return nil, err
 		}
+		raw := rows.RawValues()
 		row := make([]string, len(vals))
 		for i, v := range vals {
-			row[i] = formatValue(v)
+			row[i] = formatValue(fields[i].DataTypeOID, v, raw[i])
 		}
 		rs.Rows = append(rs.Rows, row)
 	}
@@ -493,22 +500,25 @@ func (s *pgSession) Close() error {
 	return nil
 }
 
-func formatValue(v any) string {
-	switch x := v.(type) {
-	case nil:
+// formatValue devolve o texto de uma célula: text é o valor escrito pelo Postgres
+// (nil para NULL) e v é o mesmo valor decodificado, usado em booleanos e datas.
+func formatValue(oid uint32, v any, text []byte) string {
+	if text == nil {
 		return "∅"
-	case time.Time:
-		if x.Hour() == 0 && x.Minute() == 0 && x.Second() == 0 {
-			return x.Format("2006-01-02")
-		}
-		return x.Format("2006-01-02 15:04:05")
-	case []byte:
-		return fmt.Sprintf("\\x%x", x)
-	case string:
-		return strings.Join(strings.Fields(x), " ") // achata quebras de linha
-	default:
-		return strings.Join(strings.Fields(fmt.Sprintf("%v", x)), " ")
 	}
+	if b, ok := v.(bool); ok {
+		return strconv.FormatBool(b) // o texto do Postgres seria "t"/"f"
+	}
+	if t, ok := v.(time.Time); ok && t.Year() > 0 {
+		if oid == pgtype.TimestamptzOID {
+			t = t.Local()
+		}
+		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
+			return t.Format("2006-01-02")
+		}
+		return t.Format("2006-01-02 15:04:05")
+	}
+	return strings.Join(strings.Fields(string(text)), " ") // achata quebras de linha
 }
 
 // printableStrings extrai as sequências imprimíveis (>=2 chars) de um blob binário.

@@ -2,6 +2,8 @@
 
 > Confira se um backup de banco de dados restaura de verdade, direto do terminal.
 
+![db-verify restaurando um backup PostgreSQL e navegando pelas tabelas](docs/demo.gif)
+
 Backup que nunca foi restaurado é só uma suposição. O `db-verify` recebe um arquivo de
 backup, detecta a engine, sobe a versão certa dela em Docker, restaura o backup e abre
 uma interface no terminal com o resultado do restore, um resumo do banco e os
