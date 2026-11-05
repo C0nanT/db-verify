@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -500,10 +501,13 @@ func (s *pgSession) Close() error {
 }
 
 // formatValue devolve o texto de uma célula: text é o valor escrito pelo Postgres
-// (nil para NULL) e v é o mesmo valor decodificado, usado só para encurtar datas.
+// (nil para NULL) e v é o mesmo valor decodificado, usado em booleanos e datas.
 func formatValue(oid uint32, v any, text []byte) string {
 	if text == nil {
 		return "∅"
+	}
+	if b, ok := v.(bool); ok {
+		return strconv.FormatBool(b) // o texto do Postgres seria "t"/"f"
 	}
 	if t, ok := v.(time.Time); ok && t.Year() > 0 {
 		if oid == pgtype.TimestamptzOID {

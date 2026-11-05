@@ -78,6 +78,7 @@ func TestFormatValue(t *testing.T) {
 		{"binário", pgtype.ByteaOID, []byte{0xde, 0xad, 0xbe, 0xef}, `\xdeadbeef`, `\xdeadbeef`},
 		{"string com quebra de linha é achatada", pgtype.TextOID, "x", "linha um\nlinha dois\n\tlinha três", "linha um linha dois linha três"},
 		{"string simples", pgtype.TextOID, "ok", "ok", "ok"},
+		{"booleano por extenso", pgtype.BoolOID, true, "t", "true"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
