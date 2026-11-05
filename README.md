@@ -28,10 +28,9 @@ O binário vai para `$(go env GOPATH)/bin`, que precisa estar no `PATH`.
 db-verify caminho/para/backup.dump
 ```
 
-Sem argumentos, o programa procura backups na pasta `data/` ao lado do binário e abre
-um seletor interativo, mostrando a engine detectada para cada arquivo. Com `go install`,
-essa pasta é `$(go env GOPATH)/bin/data`, então costuma ser mais simples passar o
-caminho do backup.
+Sem argumentos, o programa procura backups em `./data` e abre um seletor interativo,
+mostrando a engine detectada para cada arquivo. Se essa pasta não existir, usa `data/`
+ao lado do binário.
 
 ```bash
 db-verify                                 # escolhe um backup de data/
