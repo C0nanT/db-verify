@@ -241,6 +241,40 @@ func TestFullFlow_Postgres(t *testing.T) {
 		}
 	})
 
+	t.Run("valores aparecem como o Postgres os escreve, não como structs Go", func(t *testing.T) {
+		cases := []struct{ expr, want string }{
+			{"79.90::numeric(10,2)", "79.90"},
+			{"100.00::numeric(10,2)", "100.00"},
+			{"-0.05::numeric", "-0.05"},
+			{"'NaN'::numeric", "NaN"},
+			{"'Infinity'::numeric", "Infinity"},
+			{"NULL::numeric", "∅"},
+			{"ARRAY[1.50,2.00]::numeric[]", "{1.50,2.00}"},
+			{"'1 day 2 hours'::interval", "1 day 02:00:00"},
+			{"'12:30:00'::time", "12:30:00"},
+			{"'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"},
+			{"B'101'::bit(3)", "101"},
+			{`'{"a":1}'::jsonb`, `{"a": 1}`},
+			{"'[1,5)'::int4range", "[1,5)"},
+			{"'\\xdeadbeef'::bytea", `\xdeadbeef`},
+			{"'2024-03-15'::date", "2024-03-15"},
+			{"'2024-03-15 13:45:30.5'::timestamp", "2024-03-15 13:45:30"},
+			{"'infinity'::timestamp", "infinity"},
+			{"'0044-03-15 BC'::date", "0044-03-15 BC"},
+			{"'2024-03-15 13:45:30+00'::timestamptz", time.Date(2024, 3, 15, 13, 45, 30, 0, time.UTC).Local().Format("2006-01-02 15:04:05")},
+		}
+		for _, tc := range cases {
+			rs, err := sess.Query(ctx, "SELECT "+tc.expr)
+			if err != nil {
+				t.Errorf("%s: %v", tc.expr, err)
+				continue
+			}
+			if got := rs.Rows[0][0]; got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.expr, got, tc.want)
+			}
+		}
+	})
+
 	t.Run("heurística de coluna de ordenação por família", func(t *testing.T) {
 		cases := []struct {
 			table      string
