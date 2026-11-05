@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // fakeEngine é uma engine mínima para testar a disputa de confiança sem

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"db-verify/internal/docker"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // TestProvision_UsaHostInjetado prova que Provision fala com a CLI Docker só

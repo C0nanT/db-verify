@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"db-verify/internal/detect"
-	"db-verify/internal/engine"
 	"fmt"
+	"github.com/C0nanT/db-verify/internal/detect"
+	"github.com/C0nanT/db-verify/internal/engine"
 	"os"
 	"path/filepath"
 	"sort"

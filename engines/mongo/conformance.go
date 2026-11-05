@@ -27,8 +27,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 
-	"db-verify/internal/conformance"
-	"db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/conformance"
+	"github.com/C0nanT/db-verify/internal/docker"
 )
 
 func init() {

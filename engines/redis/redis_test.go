@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // TestRedisDetect_ExtensaoSemMagic caracteriza o fallback de confiança

@@ -30,9 +30,9 @@ import (
 	"testing"
 	"time"
 
-	"db-verify/internal/conformance"
-	"db-verify/internal/docker"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/conformance"
+	"github.com/C0nanT/db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 const testSchemaSQL = `

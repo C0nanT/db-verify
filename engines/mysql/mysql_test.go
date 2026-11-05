@@ -7,7 +7,7 @@ package mysql
 import (
 	"testing"
 
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // TestMySQLDetect_ExtensaoSemCabecalho caracteriza o sinal de confiança

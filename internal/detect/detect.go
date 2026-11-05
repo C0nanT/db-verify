@@ -21,8 +21,8 @@ import (
 	"os"
 	"strings"
 
-	"db-verify/internal/dumpio"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/dumpio"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // headerSize é quanto do arquivo (já descomprimido) a detecção lê. Grande o

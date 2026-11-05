@@ -22,9 +22,9 @@ package redis
 import (
 	"archive/tar"
 	"context"
-	"db-verify/internal/dumpio"
-	"db-verify/internal/engine"
 	"fmt"
+	"github.com/C0nanT/db-verify/internal/dumpio"
+	"github.com/C0nanT/db-verify/internal/engine"
 	"io"
 	"os"
 	"regexp"
@@ -35,7 +35,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/docker"
 )
 
 // Engine implementa Engine para Redis. Host é o acesso à CLI Docker; nil

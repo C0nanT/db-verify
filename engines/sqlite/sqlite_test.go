@@ -12,7 +12,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/engine"
 	"os"
 	"path/filepath"
 	"strings"

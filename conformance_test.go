@@ -18,15 +18,15 @@ package main
 
 import (
 	"context"
-	"db-verify/internal/detect"
-	"db-verify/internal/docker"
-	"db-verify/internal/engine"
 	"fmt"
+	"github.com/C0nanT/db-verify/internal/detect"
+	"github.com/C0nanT/db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/engine"
 	"os"
 	"strconv"
 	"testing"
 
-	"db-verify/internal/conformance"
+	"github.com/C0nanT/db-verify/internal/conformance"
 )
 
 // TestEngineConformance é o corpo único de conformidade: roda contra toda

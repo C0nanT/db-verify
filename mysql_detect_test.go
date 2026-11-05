@@ -6,7 +6,7 @@ package main
 import (
 	"testing"
 
-	"db-verify/internal/detect"
+	"github.com/C0nanT/db-verify/internal/detect"
 )
 
 // TestMySQLDetect_Header caracteriza a detecção pelo cabeçalho de texto do

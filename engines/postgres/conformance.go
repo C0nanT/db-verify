@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"db-verify/internal/conformance"
+	"github.com/C0nanT/db-verify/internal/conformance"
 )
 
 func init() {

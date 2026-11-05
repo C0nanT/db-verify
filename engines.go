@@ -1,12 +1,12 @@
 package main
 
 import (
-	"db-verify/engines/mongo"
-	"db-verify/engines/mysql"
-	"db-verify/engines/postgres"
-	"db-verify/engines/redis"
-	"db-verify/engines/sqlite"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/engines/mongo"
+	"github.com/C0nanT/db-verify/engines/mysql"
+	"github.com/C0nanT/db-verify/engines/postgres"
+	"github.com/C0nanT/db-verify/engines/redis"
+	"github.com/C0nanT/db-verify/engines/sqlite"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // Esta é a única lista de engines do binário. A ordem importa:

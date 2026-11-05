@@ -10,9 +10,9 @@ package main
 // reconheceu", testados com engines fictícias, vivem em internal/detect.
 
 import (
-	"db-verify/internal/detect"
-	"db-verify/internal/dumpio"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/detect"
+	"github.com/C0nanT/db-verify/internal/dumpio"
+	"github.com/C0nanT/db-verify/internal/engine"
 	"io"
 	"os"
 	"path/filepath"

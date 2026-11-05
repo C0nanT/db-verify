@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"db-verify/internal/docker"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // RequireDocker pula o teste quando o daemon Docker não está disponível.

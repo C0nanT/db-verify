@@ -18,7 +18,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"db-verify/internal/conformance"
+	"github.com/C0nanT/db-verify/internal/conformance"
 )
 
 // TestFindBackups_ListaTodoArquivoReconhecido cobre a mudança central do

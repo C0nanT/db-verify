@@ -16,10 +16,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"db-verify/internal/docker"
-	"db-verify/internal/dumpio"
-	"db-verify/internal/engine"
-	"db-verify/internal/relational"
+	"github.com/C0nanT/db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/dumpio"
+	"github.com/C0nanT/db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/relational"
 )
 
 // Engine implementa engine.Engine para PostgreSQL. Host é o acesso à CLI

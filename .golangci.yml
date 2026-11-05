@@ -26,11 +26,11 @@ linters-settings:
         files:
           - "**/engines/**"
         deny:
-          - pkg: db-verify/engines
+          - pkg: github.com/C0nanT/db-verify/engines
             desc: engine não importa outra engine (extraia para internal/relational ou internal/docker)
-          - pkg: db-verify/internal/ui
+          - pkg: github.com/C0nanT/db-verify/internal/ui
             desc: engine não importa a interface do terminal
-          - pkg: db-verify/internal/detect
+          - pkg: github.com/C0nanT/db-verify/internal/detect
             desc: engine não importa a detecção
       # A CLI Docker de produção passa só por internal/docker (DockerHost).
       # Ficam de fora as fixtures de conformidade e os testes com tag docker,
@@ -51,7 +51,7 @@ linters-settings:
           - "**/internal/ui/**"
           - "**/internal/detect/**"
         deny:
-          - pkg: db-verify/engines
+          - pkg: github.com/C0nanT/db-verify/engines
             desc: ui e detect conhecem só internal/engine, não engines concretas
       # engine e dumpio são folhas: não importam nenhum outro pacote do projeto.
       folhas:
@@ -59,7 +59,7 @@ linters-settings:
           - "**/internal/engine/**"
           - "**/internal/dumpio/**"
         deny:
-          - pkg: db-verify/
+          - pkg: github.com/C0nanT/db-verify/
             desc: engine e dumpio não importam outros pacotes do projeto
 
 issues:

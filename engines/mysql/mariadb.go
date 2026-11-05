@@ -23,8 +23,8 @@ import (
 	"context"
 	"regexp"
 
-	"db-verify/internal/docker"
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // MariaDBEngine implementa Engine para MariaDB. Host é o acesso à CLI
