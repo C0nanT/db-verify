@@ -2,8 +2,8 @@ package ui
 
 import (
 	"context"
-	"db-verify/internal/engine"
 	"fmt"
+	"github.com/C0nanT/db-verify/internal/engine"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"

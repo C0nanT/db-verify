@@ -1,196 +1,106 @@
-# db-verify (Go + TUI)
+# db-verify
 
-Sobe o banco certo em Docker (ou abre o arquivo direto, no caso do SQLite), restaura
-um backup e abre uma interface no terminal para conferir se ele está saudável — com
-listagem de coleções (tabelas, coleções do Mongo, grupos de chaves do Redis…) e os
-**20 registros mais recentes** da coleção selecionada.
+> Confira se um backup de banco de dados restaura de verdade, direto do terminal.
 
-Verificador de backups **agnóstico de banco**: aponte para um arquivo de qualquer
-engine suportada e o fluxo é sempre o mesmo — detecção, container, restore, TUI.
+Backup que nunca foi restaurado é só uma suposição. O `db-verify` recebe um arquivo de
+backup, detecta a engine, sobe a versão certa dela em Docker, restaura o backup e abre
+uma interface no terminal com o resultado do restore, um resumo do banco e os
+**20 registros mais recentes** de cada tabela ou coleção.
 
-## Build
+Funciona com PostgreSQL, MySQL, MariaDB, SQLite, Redis e MongoDB.
 
-```bash
-cd db-verify
-go build -o db-verify .
-```
+## Requisitos
 
-## Uso
+- Go 1.26 ou mais recente, para compilar
+- Docker em execução (dispensável para SQLite, que abre o arquivo direto)
 
-Sem argumentos, o programa procura arquivos de backup reconhecidos na pasta `data/`
-ao lado do binário e abre um seletor interativo, mostrando a engine detectada para
-cada um:
+## Instalação
 
 ```bash
-./db-verify
+go install github.com/C0nanT/db-verify@latest
 ```
 
-Também é possível apontar um arquivo diretamente:
+O binário vai para `$(go env GOPATH)/bin`, que precisa estar no `PATH`.
+
+## Uso rápido
 
 ```bash
-./db-verify data/loja.sql.gz
-./db-verify data/dump.rdb
-./db-verify data/app.sqlite
-./db-verify data/mongo-backup.archive
-./db-verify --engine mysql backup_sem_extensao
-./db-verify --keep --version-tag 15 --port 5555 ../meu_backup.dump
+db-verify caminho/para/backup.dump
 ```
 
-A engine é detectada pelo conteúdo do arquivo (magic bytes), com a extensão como
-desempate quando o conteúdo é ambíguo. `--engine` força uma engine específica e pula
-a detecção inteiramente; `--list-engines` lista as engines registradas e o que cada
-uma reconhece.
+Sem argumentos, o programa procura backups na pasta `data/` ao lado do binário e abre
+um seletor interativo, mostrando a engine detectada para cada arquivo. Com `go install`,
+essa pasta é `$(go env GOPATH)/bin/data`, então costuma ser mais simples passar o
+caminho do backup.
+
+```bash
+db-verify                                 # escolhe um backup de data/
+db-verify data/loja.sql.gz                # backups comprimidos também funcionam
+db-verify --engine mysql backup_sem_ext   # força a engine, sem detecção
+db-verify --keep --port 5555 backup.dump  # mantém o container ao sair
+```
+
+Na interface, o cabeçalho mostra se o restore terminou sem erros, junto com o tamanho
+do banco e contagens como tabelas, índices e chaves estrangeiras (variam por engine).
+
+Ao sair, o container é removido (a menos que use `--keep`) e a string de conexão é
+impressa para reuso com o cliente nativo da engine.
 
 ## Engines suportadas
 
-| engine | formato do backup | comando para gerar um backup verificável | imagem | fallback de versão |
-|---|---|---|---|---|
-| `postgres` | dump do `pg_dump`: magic `PGDMP` (custom), cabeçalho `PostgreSQL database dump` (plain), ou extensão `.tar`/`.sql` | `pg_dump -U <user> -d <db> -Fc -f backup.dump` | `postgres:<v>-alpine` | `16` |
-| `mysql` | dump do `mysqldump`: cabeçalho `-- MySQL dump`, ou extensão `.sql` | `mysqldump -u<user> -p<senha> <db> > backup.sql` | `mysql:<v>` | `8.0` |
-| `mariadb` | dump do `mariadb-dump`: cabeçalho `-- MariaDB dump` (sem fallback de extensão — `.sql` sem esse cabeçalho vai para o MySQL) | `mariadb-dump -u<user> -p<senha> <db> > backup.sql` | `mariadb:<v>` | `10.11` |
-| `sqlite` | arquivo SQLite: magic `SQLite format 3\0`, ou extensão `.sqlite`/`.db` | o próprio arquivo `.sqlite`/`.db` já é o backup — não há passo de dump | *(dispensa Docker — ver abaixo)* | — |
-| `redis` | dump `.rdb`: magic `REDIS` + versão do formato do RDB, ou extensão `.rdb` | `redis-cli SAVE` (ou deixar o `BGSAVE` automático rodar) e copiar `dump.rdb` do datadir | `redis:<v>-alpine` | `7.4` |
-| `mongodb` | archive do `mongodump`: magic number `0x8199e26d`, ou extensão `.archive` | `mongodump --archive=backup.archive --db=<db>` | `mongo:<v>` | `7.0` |
+| engine | backup aceito | como gerar |
+|---|---|---|
+| `postgres` | dump do `pg_dump` (custom, plain ou tar) | `pg_dump -U <user> -d <db> -Fc -f backup.dump` |
+| `mysql` | dump do `mysqldump` | `mysqldump -u<user> -p <db> > backup.sql` |
+| `mariadb` | dump do `mariadb-dump` | `mariadb-dump -u<user> -p <db> > backup.sql` |
+| `sqlite` | o próprio arquivo `.sqlite`/`.db` | não há passo de dump |
+| `redis` | arquivo `.rdb` | `redis-cli SAVE` e copiar `dump.rdb` do datadir |
+| `mongodb` | archive do `mongodump` | `mongodump --archive=backup.archive --db=<db>` |
 
-A versão da imagem é resolvida nesta ordem de precedência para todas as engines:
-`--version-tag` explícito → versão extraída do próprio backup (quando o formato
-carrega essa informação) → fallback da tabela acima. `--pg` continua funcionando
-como alias depreciado de `--version-tag`.
-
-O Redis é a engine que mais foge do formato "arquivo de dump para restaurar":
-não há comando de restore, o próprio `.rdb` precisa estar no datadir do container
-**antes** do `redis-server` iniciar (ele só é lido na inicialização), e "coleção" é
-inferido por convenção de prefixo no nome da chave (`grupo:123`), não uma entidade
-que o servidor conheça.
+Arquivos comprimidos com gzip, zstd ou bzip2 são reconhecidos em qualquer engine.
+Detecção, versões de imagem e ordenação dos registros estão em
+[docs/engines.md](docs/engines.md).
 
 ## Flags
 
 | flag | padrão | efeito |
 |---|---|---|
-| `--version-tag` | versão lida do backup (fallback por engine, ver tabela acima) | versão da imagem da engine detectada |
-| `--pg` | — | **depreciado**, alias de `--version-tag` |
-| `--port` | omitido: janela da engine; explícito: primeira tentativa | porta publicada em `127.0.0.1` |
-| `--jobs` | 4 | paralelismo do restore, quando a engine suportar |
+| `--engine` | detecção automática | força a engine, pulando a detecção |
+| `--list-engines` | — | lista as engines e o que cada uma reconhece, e sai |
+| `--version-tag` | versão lida do backup | versão da imagem da engine |
+| `--port` | escolhida pela engine | porta publicada em `127.0.0.1` |
 | `--db` | `verify` | nome do banco de destino |
+| `--jobs` | 4 | paralelismo do restore, quando a engine suportar |
 | `--keep` | off | não remove o container ao sair |
-| `--no-counts` | off | usa contagem estimada em vez de `count(*)`/equivalente (bancos grandes) |
-| `--engine` | detecção automática | força a engine, pulando a detecção; veja `--list-engines` |
-| `--list-engines` | — | lista as engines suportadas e o que cada uma reconhece, e sai |
+| `--no-counts` | off | usa contagem estimada em vez de `count(*)` (bancos grandes) |
 
 ## Teclas
 
 | tecla | ação |
 |---|---|
-| `↑`/`↓` ou `k`/`j` | navega pelas coleções (consulta automática) |
+| `↑`/`↓` ou `k`/`j` | navega pelas coleções |
 | clique / roda do mouse | seleciona a coleção no painel esquerdo |
 | `enter` / `r` | reexecuta a consulta |
 | `←`/`→` ou `h`/`l` | rola as colunas do resultado |
 | `shift+←`/`shift+→` ou `H`/`L` | rola o resultado uma tela inteira |
 | `0` / `$` | vai ao início / fim da linha do resultado |
-| `e` | expande as colunas (sem truncar em 28 caracteres) para ler valores longos inteiros |
-| `tab` | oculta/mostra o painel de coleções (resultado usa a largura toda) |
-| `/` | filtra coleções (esc limpa) |
+| `e` | expande as colunas (sem truncar em 28 caracteres) |
+| `tab` | oculta/mostra o painel de coleções |
+| `/` | filtra coleções (`esc` limpa) |
 | `q` / `esc` / `ctrl+c` | sai e derruba o container |
 
-## Compressão aceita
+## Limitações
 
-A detecção enxerga através de gzip, zstd e bzip2 — o cabeçalho é descomprimido antes
-de identificar a engine, então `dump.sql.gz`, `backup.rdb.gz` etc. são reconhecidos
-normalmente, para qualquer engine.
+- O `db-verify` mostra que o backup restaura e permite inspecionar os dados. Ele não
+  compara o conteúdo com o banco de origem.
+- Redis: aceita apenas RDB. "Coleções" são inferidas pelo prefixo das chaves
+  (`grupo:123`), e "mais recentes" é uma aproximação pela ordem dos nomes.
+- MongoDB: aceita apenas o formato `mongodump --archive`.
 
-## Docker
+## Contribuindo
 
-Todas as engines exigem Docker, **exceto SQLite**: por ser um banco embarcado, o
-"restore" é só copiar o arquivo para um temporário (o original nunca é tocado) e
-rodar um `PRAGMA integrity_check` nele, via driver in-process (`modernc.org/sqlite`,
-puro Go, sem cgo) — sem subir servidor nenhum. As demais engines sobem um container
-da imagem/versão resolvida, restauram e conectam nele.
+Veja [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Como decide os "20 mais recentes"
+## Licença
 
-Cada engine relacional (Postgres, MySQL, MariaDB, SQLite) escolhe a coluna de
-ordenação nesta ordem: nomes conhecidos de criação (`created_at`, `data_criacao`, …)
-→ publicação (`data`, `published_at`, …) → atualização (`updated_at`, …) → qualquer
-`timestamp`/`date` → PK de coluna única. Sem nenhuma opção, cai em
-`SELECT * … LIMIT 20`. O SQL usado fica visível no painel.
-
-No MongoDB a lógica é a mesma família de nomes, procurados nos campos do tipo Date de
-uma amostra de documentos da coleção; sem nenhum campo de data, cai em ordenar por
-`_id` decrescente (que no Mongo já é cronológico por construção), então nunca fica
-sem critério de ordenação. O comando `mongosh` equivalente também fica visível no
-painel.
-
-O Redis é o caso à parte: não existe conceito de "mais recente" no protocolo. A
-amostra do grupo de chaves é ordenada por nome da chave em ordem decrescente antes de
-aplicar o limite de 20 — determinístico, e alinhado com a convenção mais comum de
-sufixar chaves com algo crescente (id, timestamp), então a chave "maior" tende a ser
-a mais nova.
-
-## Estrutura
-
-Um binário, um `go.mod`; o código mora em pacotes Go. O compilador esconde o que é
-privado de cada pacote e a regra `depguard` (`.golangci.yml`) reprova importações na
-direção errada. As decisões estão em `docs/adr/0001-monolito-modular.md`.
-
-| pacote | responsabilidade |
-|---|---|
-| `main` (raiz) | flags, roteiro `run()`, lista explícita de engines (`engines.go`) e testes do conjunto montado |
-| `internal/engine` | interfaces `Engine`/`Session`, tipos compartilhados (`Match`, `Backup`, `Collection`, `Health`…) e o registro de engines |
-| `internal/relational` | heurística de coluna de ordenação compartilhada entre as engines relacionais |
-| `internal/docker` | `DockerHost`: daemon, portas livres e retry por conflito de porta |
-| `internal/dumpio` | abre o backup descomprimindo gzip/zstd/bzip2 |
-| `internal/detect` | detecção de formato genérica: cabeçalho descomprimido + disputa entre engines registradas |
-| `internal/ui` | seletor interativo de backups em `data/` e interface bubbletea/lipgloss |
-| `internal/conformance` | registro de fixtures e helpers da suíte de conformidade (tag `docker`) e caminho de `testdata/headers/` |
-| `engines/postgres/` | engine PostgreSQL (`pg_restore`/`psql` via `pgx`) |
-| `engines/mysql/` | engines MySQL (`mysql`/`mysqldump` via `database/sql`) e MariaDB (reusa o container e a sessão do MySQL, imagem/binários `mariadb-*`) |
-| `engines/sqlite/` | engine SQLite (driver in-process, sem container) |
-| `engines/redis/` | engine Redis (RDB posicionado no datadir antes do `redis-server` subir) |
-| `engines/mongo/` | engine MongoDB (`mongorestore --archive`, achatamento de documentos aninhados) |
-
-O container é sempre removido ao sair (inclusive em `ctrl+c`), a menos que use
-`--keep`. Ao encerrar, a string de conexão é impressa para reuso com o cliente
-nativo da engine (`psql`, `mysql`, `redis-cli`, `mongosh`…) ou DBeaver.
-
-## Qualidade
-
-Um único ponto de entrada: `scripts/check <nível>`.
-
-| nível | o que roda |
-|---|---|
-| `fast` | `gofmt` → `go vet` → `golangci-lint` → `gitleaks` (staged) → `go test ./...` |
-| `full` | tudo do `fast`, depois preflight do daemon Docker e `go test -tags docker ./...` |
-
-Num clone novo, ative os hooks versionados (só config local, sem `git config --global`):
-
-```bash
-./scripts/install-hooks
-```
-
-Isso aponta `core.hooksPath` para `.githooks/`. `pre-commit` chama `scripts/check fast`;
-`pre-push` chama `scripts/check full`. O gate de push **exige daemon Docker ligado** —
-se o daemon estiver parado, o push aborta.
-
-`--no-verify` continua existindo como válvula consciente de emergência. Não há pipeline
-no GitHub cobrindo o bypass: um commit/push com `--no-verify` não é revalidado fora da
-máquina.
-
-## Como adicionar uma engine nova
-
-1. Criar um pacote `engines/<engine>/` implementando `Engine` e `Session`
-   (`internal/engine`) — `Detect`, `Expects` e `Provision` do lado de `Engine`;
-   `Health`, `Collections`, `Recent`, `Query`, `ConnectHint`, `Restore`, `Close` do
-   lado de `Session`. Uma engine não importa outra engine, `internal/ui` nem
-   `internal/detect` (o `depguard` reprova no `scripts/check fast`); código comum vai
-   para `internal/relational`, `internal/docker` ou `internal/dumpio`.
-2. Se a engine for relacional, reusar a heurística de `internal/relational`
-   (`OrderColumnTiers`, `ChooseOrderColumn`, `OrderHint`) em vez de reimplementar a ordem de preferência
-   de coluna.
-3. Criar `engines/<engine>/conformance.go` com a build tag `docker`, cadastrando uma
-   `conformance.ConformanceFixture` (`conformance.Register`) que descreve como gerar
-   um backup mínimo válido e um truncado/corrompido. A engine só está pronta quando
-   passa na suíte de conformidade genérica (`go test -tags docker ./...`) sem nenhuma
-   exceção específica de engine; engine na lista sem fixture reprova a suíte.
-4. Adicionar a engine à lista explícita em `engines.go` (raiz). A ordem da lista
-   decide o desempate de detecção (mesma confiança): acrescente no fim, a menos que o
-   desempate desejado exija outra posição.
+[MIT](LICENSE)

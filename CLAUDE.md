@@ -181,7 +181,3 @@ Local markdown under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
 ### Domain docs
 
 Single-context — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
-
-### Git guardrails
-
-Destructive git (`commit`, `push`, `reset`, …) is denied via `permissions.deny` in `.claude/settings.json`. See `docs/agents/git-guardrails.md`.

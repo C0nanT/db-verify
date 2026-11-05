@@ -12,7 +12,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 // buildMongoArchiveHeader monta um cabeçalho de archive sintético: magic

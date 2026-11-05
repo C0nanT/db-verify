@@ -1,4 +1,4 @@
-module db-verify
+module github.com/C0nanT/db-verify
 
 go 1.26.2
 

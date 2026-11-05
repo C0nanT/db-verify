@@ -22,11 +22,11 @@ package mongo
 import (
 	"bytes"
 	"context"
-	"db-verify/internal/dumpio"
-	"db-verify/internal/engine"
-	"db-verify/internal/relational"
 	"encoding/binary"
 	"fmt"
+	"github.com/C0nanT/db-verify/internal/dumpio"
+	"github.com/C0nanT/db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/relational"
 	"os"
 	"regexp"
 	"sort"
@@ -38,7 +38,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 
-	"db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/docker"
 )
 
 // Engine implementa Engine para MongoDB. Host é o acesso à CLI Docker; nil

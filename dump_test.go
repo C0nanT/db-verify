@@ -9,7 +9,7 @@ package main
 import (
 	"testing"
 
-	"db-verify/internal/detect"
+	"github.com/C0nanT/db-verify/internal/detect"
 )
 
 // TestInspectDump_Formatos cobre a detecção de formato/versão/banco de

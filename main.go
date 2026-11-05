@@ -6,12 +6,12 @@ package main
 
 import (
 	"context"
-	"db-verify/internal/detect"
-	"db-verify/internal/engine"
-	"db-verify/internal/ui"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/C0nanT/db-verify/internal/detect"
+	"github.com/C0nanT/db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/ui"
 	"os"
 	"os/signal"
 	"path/filepath"

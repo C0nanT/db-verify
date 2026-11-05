@@ -8,7 +8,7 @@ package ui
 import (
 	"context"
 
-	"db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/engine"
 )
 
 type fakePostgres struct{}

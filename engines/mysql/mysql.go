@@ -20,10 +20,10 @@ package mysql
 import (
 	"context"
 	"database/sql"
-	"db-verify/internal/dumpio"
-	"db-verify/internal/engine"
-	"db-verify/internal/relational"
 	"fmt"
+	"github.com/C0nanT/db-verify/internal/dumpio"
+	"github.com/C0nanT/db-verify/internal/engine"
+	"github.com/C0nanT/db-verify/internal/relational"
 	"os"
 	"regexp"
 	"strings"
@@ -32,7 +32,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"db-verify/internal/docker"
+	"github.com/C0nanT/db-verify/internal/docker"
 )
 
 // Engine implementa Engine para MySQL. Host é o acesso à CLI Docker; nil
